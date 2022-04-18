@@ -31,6 +31,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define LEDS 144
+#define FRAMEBUFFER 1296
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,9 +52,80 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-uint8_t framebuffer[1296];
-uint8_t test[4] = {0, 0, 0, 0};
+uint8_t framebuffer[FRAMEBUFFER];
 volatile uint8_t spiBusy = 0;
+
+const uint8_t colors[5][3] = {
+		{0, 0, 0},			// black
+		{255, 255, 255},	// white
+		{255, 0, 0},		// red
+		{0, 255, 0},		// green
+		{0, 0, 255}			// blue
+};
+
+uint8_t backgroundColor = 0;
+uint8_t foregroundColor = 1;
+uint8_t currentGraphic = 0;
+
+int8_t carPlace[4] = {32, 28, 20, 10};
+uint8_t carSide[4] = {0, 1, 0, 1};
+
+const uint8_t carSprites[2][6] = {
+		{8, 9, 12, 27, 28, 31},		// left car
+		{6, 7, 14, 25, 26, 33}		// right car
+};
+
+const uint8_t digits[10][7] = {
+		{78, 94, 95,  0, 113, 114, 116}, 	// 0
+		{78,  0,  0, 97,   0,   0, 116}, 	// 1
+		{78, 94,  0, 97,   0, 114, 116},	// 2
+		{78,  0, 95, 97,   0, 114, 116},	// 3
+		{78,  0,  0, 97, 113,   0, 116},	// 4
+		{78,  0, 95, 97, 113,   0, 116},	// 5
+		{78, 94, 95, 97, 113,   0, 116},	// 6
+		{ 0,  0, 95,  0, 113, 114, 116},	// 7
+		{78, 94, 95, 97, 113, 114, 116},	// 8
+		{78,  0, 95, 97, 113, 114, 116}		// 9
+};
+
+const uint8_t graphics[5][18] = {
+		{		// Appul
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b01010000, 0b00111100, 0b00011110, 0b00000011,
+				0b10000011, 0b11000000, 0b01110000, 0b01111000,
+				0b00011110, 0b00000101, 0b00000001, 0b00000000,
+				0b00100000, 0b00000000
+		},
+		{		// OwO
+				0b00000000, 0b00000011, 0b10000001, 0b11100000,
+				0b10001000, 0b00100100, 0b00000000, 0b00000000,
+				0b00000110, 0b00110010, 0b10010100, 0b00000000,
+				0b01010010, 0b10011000, 0b11000000, 0b00000000,
+				0b00000000, 0b00000000
+		},
+		{		// dwd
+				0b00000000, 0b00000011, 0b10000001, 0b11100000,
+				0b10001000, 0b00100100, 0b00000000, 0b00000000,
+				0b00000110, 0b00110010, 0b10010100, 0b00000000,
+				0b01110011, 0b10000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000
+		},
+		{		// uwu
+				0b00000000, 0b00000011, 0b10000001, 0b11100000,
+				0b10001000, 0b00100100, 0b00000000, 0b00000000,
+				0b00000110, 0b00110010, 0b10010100, 0b00000000,
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000
+		},
+		{		// track
+				0b00011100, 0b00100000, 0b00000000, 0b10000100,
+				0b00000000, 0b00010000, 0b10000000, 0b00000010,
+				0b00010000, 0b00000000, 0b01000010, 0b00000000,
+				0b00001000, 0b01000000, 0b00000001, 0b00001000,
+				0b00000000, 0b11100001
+		}
+
+};
 
 /* USER CODE END PV */
 
@@ -107,7 +182,7 @@ int main(void)
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
 
-  for (uint16_t i=0; i<1296; i+=9) {
+  for (uint16_t i=0; i<FRAMEBUFFER; i+=9) {
 	  framebuffer[i+0] = 0b10010010; // G
 	  framebuffer[i+1] = 0b01001001;
 	  framebuffer[i+2] = 0b00100100;
@@ -131,14 +206,20 @@ int main(void)
 		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
 		  //HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 		  spiBusy = 1;
-		  for (test[0]=0; test[0]<144; test[0]++) {
-			  setPixelColor(test[0], test[1], test[2], test[3]);
-		  }
-		  test[1]++;
-		  test[2] = test[1]*2 - test[3];
-		  test[3] = test[1] + test[2];
 
-		  HAL_SPI_Transmit_DMA(&hspi1, framebuffer, 1296);
+		  for (uint8_t i=0; i<LEDS; i++) {
+			  if (graphics[currentGraphic][i/8] & (0x80 >> i%8)) {
+				  setPixelColor(i, colors[foregroundColor][0], colors[foregroundColor][1], colors[foregroundColor][2]);
+			  } else {
+				  setPixelColor(i, colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
+			  }
+		  }
+
+		  if (currentGraphic == 4) {
+
+		  }
+
+		  HAL_SPI_Transmit_DMA(&hspi1, framebuffer, FRAMEBUFFER);
 		  //HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 	  }
 	  //if (spiBusy == 3) HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);

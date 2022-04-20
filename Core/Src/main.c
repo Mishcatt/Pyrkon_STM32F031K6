@@ -43,17 +43,19 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- RTC_HandleTypeDef hrtc;
-
-SPI_HandleTypeDef hspi1;
+ SPI_HandleTypeDef hspi1;
 DMA_HandleTypeDef hdma_spi1_tx;
+
+TIM_HandleTypeDef htim14;
 
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-uint8_t framebuffer[FRAMEBUFFER];
+uint8_t framebuffer[1][FRAMEBUFFER];
+volatile uint8_t currentFramebuffer = 0;
 volatile uint8_t spiBusy = 0;
+volatile uint8_t periodCounter = 99;
 
 const uint8_t colors[5][3] = {
 		{0, 0, 0},			// black
@@ -67,7 +69,7 @@ uint8_t backgroundColor = 0;
 uint8_t foregroundColor = 1;
 uint8_t currentGraphic = 0;
 
-int8_t carPlace[4] = {32, 28, 20, 10};
+int8_t carPlace[4] = {6, 3, 1, -1};
 uint8_t carSide[4] = {0, 1, 0, 1};
 
 const uint8_t carSprites[2][6] = {
@@ -135,7 +137,7 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_SPI1_Init(void);
-static void MX_RTC_Init(void);
+static void MX_TIM14_Init(void);
 /* USER CODE BEGIN PFP */
 
 void setPixelColor(uint8_t p, uint8_t r, uint8_t g, uint8_t b);
@@ -179,20 +181,22 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_SPI1_Init();
-  MX_RTC_Init();
+  MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
 
   for (uint16_t i=0; i<FRAMEBUFFER; i+=9) {
-	  framebuffer[i+0] = 0b10010010; // G
-	  framebuffer[i+1] = 0b01001001;
-	  framebuffer[i+2] = 0b00100100;
-	  framebuffer[i+3] = 0b10010010; // R
-	  framebuffer[i+4] = 0b01001001;
-	  framebuffer[i+5] = 0b00100100;
-	  framebuffer[i+6] = 0b10010010; // B
-	  framebuffer[i+7] = 0b01001001;
-	  framebuffer[i+8] = 0b00100100;
+	  framebuffer[currentFramebuffer][i+0] = 0b10010010; // G
+	  framebuffer[currentFramebuffer][i+1] = 0b01001001;
+	  framebuffer[currentFramebuffer][i+2] = 0b00100100;
+	  framebuffer[currentFramebuffer][i+3] = 0b10010010; // R
+	  framebuffer[currentFramebuffer][i+4] = 0b01001001;
+	  framebuffer[currentFramebuffer][i+5] = 0b00100100;
+	  framebuffer[currentFramebuffer][i+6] = 0b10010010; // B
+	  framebuffer[currentFramebuffer][i+7] = 0b01001001;
+	  framebuffer[currentFramebuffer][i+8] = 0b00100100;
   }
+
+  HAL_TIM_Base_Start_IT(&htim14);
 
   //HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
 
@@ -202,8 +206,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if (spiBusy == 0) {
-		  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+	  if (spiBusy == 0 && periodCounter == 0) {
+		  periodCounter = 9;
+		  //HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
 		  //HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 		  spiBusy = 1;
 
@@ -216,10 +221,16 @@ int main(void)
 		  }
 
 		  if (currentGraphic == 4) {
-
+			  for (uint8_t car=0; car<4; car++) {
+				  for (uint8_t i=0; i<6; i++) {
+					  if ((carSprites[carSide[car]][i]+(13*carPlace[car]) > 0) && (carSprites[carSide[car]][i]+(13*carPlace[car]) < 144)) {
+						  setPixelColor((carSprites[carSide[car]][i]+(13*carPlace[car])), 255, 255, 255);
+					  }
+				  }
+			  }
 		  }
 
-		  HAL_SPI_Transmit_DMA(&hspi1, framebuffer, FRAMEBUFFER);
+		  HAL_SPI_Transmit_DMA(&hspi1, framebuffer[currentFramebuffer], FRAMEBUFFER);
 		  //HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 	  }
 	  //if (spiBusy == 3) HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
@@ -244,10 +255,9 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL5;
@@ -269,95 +279,12 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_RTC;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK1;
-  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief RTC Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_RTC_Init(void)
-{
-
-  /* USER CODE BEGIN RTC_Init 0 */
-
-  /* USER CODE END RTC_Init 0 */
-
-  RTC_TimeTypeDef sTime = {0};
-  RTC_DateTypeDef sDate = {0};
-  RTC_AlarmTypeDef sAlarm = {0};
-
-  /* USER CODE BEGIN RTC_Init 1 */
-
-  /* USER CODE END RTC_Init 1 */
-
-  /** Initialize RTC Only
-  */
-  hrtc.Instance = RTC;
-  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 255;
-  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
-  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-  if (HAL_RTC_Init(&hrtc) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /* USER CODE BEGIN Check_RTC_BKUP */
-
-  /* USER CODE END Check_RTC_BKUP */
-
-  /** Initialize RTC and set the Time and Date
-  */
-  sTime.Hours = 0x0;
-  sTime.Minutes = 0x0;
-  sTime.Seconds = 0x0;
-  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-  sDate.Month = RTC_MONTH_JANUARY;
-  sDate.Date = 0x1;
-  sDate.Year = 0x0;
-
-  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Enable the Alarm A
-  */
-  sAlarm.AlarmTime.Hours = 0x0;
-  sAlarm.AlarmTime.Minutes = 0x0;
-  sAlarm.AlarmTime.Seconds = 0x0;
-  sAlarm.AlarmTime.SubSeconds = 0x1;
-  sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-  sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  sAlarm.AlarmMask = RTC_ALARMMASK_ALL;
-  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_SS14_4;
-  sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
-  sAlarm.AlarmDateWeekDay = 0x1;
-  sAlarm.Alarm = RTC_ALARM_A;
-  if (HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN RTC_Init 2 */
-
-  /* USER CODE END RTC_Init 2 */
-
 }
 
 /**
@@ -397,6 +324,37 @@ static void MX_SPI1_Init(void)
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+  * @brief TIM14 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM14_Init(void)
+{
+
+  /* USER CODE BEGIN TIM14_Init 0 */
+
+  /* USER CODE END TIM14_Init 0 */
+
+  /* USER CODE BEGIN TIM14_Init 1 */
+
+  /* USER CODE END TIM14_Init 1 */
+  htim14.Instance = TIM14;
+  htim14.Init.Prescaler = 200;
+  htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim14.Init.Period = 1000;
+  htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM14_Init 2 */
+
+  /* USER CODE END TIM14_Init 2 */
 
 }
 
@@ -468,12 +426,24 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pins : PadUp_Pin PadDown_Pin */
+  GPIO_InitStruct.Pin = PadUp_Pin|PadDown_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PadRight_Pin PadLeft_Pin PadB_Pin PadA_Pin */
+  GPIO_InitStruct.Pin = PadRight_Pin|PadLeft_Pin|PadB_Pin|PadA_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
 
@@ -512,25 +482,25 @@ inline void setPixelColor(uint8_t p, uint8_t r, uint8_t g, uint8_t b) {
 	eb |= ((b&0b00000001)<<1);
 
 	uint16_t i = p*9;
-	framebuffer[i+0] = 0b10010010 | (eg>>16);
-	framebuffer[i+1] = 0b01001001 | (eg>>8);
-	framebuffer[i+2] = 0b00100100 | (eg);
-	framebuffer[i+3] = 0b10010010 | (er>>16);
-	framebuffer[i+4] = 0b01001001 | (er>>8);
-	framebuffer[i+5] = 0b00100100 | (er);
-	framebuffer[i+6] = 0b10010010 | (eb>>16);
-	framebuffer[i+7] = 0b01001001 | (eb>>8);
-	framebuffer[i+8] = 0b00100100 | (eb);
+	framebuffer[currentFramebuffer][i+0] = 0b10010010 | (eg>>16);
+	framebuffer[currentFramebuffer][i+1] = 0b01001001 | (eg>>8);
+	framebuffer[currentFramebuffer][i+2] = 0b00100100 | (eg);
+	framebuffer[currentFramebuffer][i+3] = 0b10010010 | (er>>16);
+	framebuffer[currentFramebuffer][i+4] = 0b01001001 | (er>>8);
+	framebuffer[currentFramebuffer][i+5] = 0b00100100 | (er);
+	framebuffer[currentFramebuffer][i+6] = 0b10010010 | (eb>>16);
+	framebuffer[currentFramebuffer][i+7] = 0b01001001 | (eb>>8);
+	framebuffer[currentFramebuffer][i+8] = 0b00100100 | (eb);
 
 }
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
-	//spiBusy = 0;
-	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+	spiBusy = 0;
+	//HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 }
 
-void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc) {
-	spiBusy = 0;
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (periodCounter) periodCounter--;
 }
 
 

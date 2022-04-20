@@ -59,6 +59,10 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define VCP_TX_Pin GPIO_PIN_2
 #define VCP_TX_GPIO_Port GPIOA
+#define PadUp_Pin GPIO_PIN_8
+#define PadUp_GPIO_Port GPIOA
+#define PadDown_Pin GPIO_PIN_11
+#define PadDown_GPIO_Port GPIOA
 #define SWDIO_Pin GPIO_PIN_13
 #define SWDIO_GPIO_Port GPIOA
 #define SWCLK_Pin GPIO_PIN_14
@@ -67,6 +71,14 @@ void Error_Handler(void);
 #define VCP_RX_GPIO_Port GPIOA
 #define LED_Pin GPIO_PIN_3
 #define LED_GPIO_Port GPIOB
+#define PadRight_Pin GPIO_PIN_4
+#define PadRight_GPIO_Port GPIOB
+#define PadLeft_Pin GPIO_PIN_5
+#define PadLeft_GPIO_Port GPIOB
+#define PadB_Pin GPIO_PIN_6
+#define PadB_GPIO_Port GPIOB
+#define PadA_Pin GPIO_PIN_7
+#define PadA_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

@@ -65,6 +65,8 @@ const uint8_t colors[5][3] = {
 		{0, 0, 255}			// blue
 };
 
+uint8_t buttonState[6];
+
 uint8_t backgroundColor = 0;
 uint8_t foregroundColor = 1;
 uint8_t currentGraphic = 0;
@@ -212,6 +214,25 @@ int main(void)
 		  //HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 		  spiBusy = 1;
 
+		  if (buttonState[0] > 127) { // Up
+
+		  }
+		  if (buttonState[1] > 127) { // Down
+
+		  }
+		  if (buttonState[2] > 127) { // Left
+
+		  }
+		  if (buttonState[3] > 127) { // Right
+
+		  }
+		  if (buttonState[4] > 127) { // A
+
+		  }
+		  if (buttonState[5] > 127) { // B
+
+		  }
+
 		  for (uint8_t i=0; i<LEDS; i++) {
 			  if (graphics[currentGraphic][i/8] & (0x80 >> i%8)) {
 				  setPixelColor(i, colors[foregroundColor][0], colors[foregroundColor][1], colors[foregroundColor][2]);
@@ -232,6 +253,37 @@ int main(void)
 
 		  HAL_SPI_Transmit_DMA(&hspi1, framebuffer[currentFramebuffer], FRAMEBUFFER);
 		  //HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+	  }
+
+	  if (HAL_GPIO_ReadPin(PadUp_GPIO_Port, PadUp_Pin) == GPIO_PIN_RESET) {
+		  if (buttonState[0] < 255) buttonState[0]++;
+	  }	else {
+		  if (buttonState[0] > 0) buttonState[0]--;
+	  }
+	  if (HAL_GPIO_ReadPin(PadDown_GPIO_Port, PadDown_Pin) == GPIO_PIN_RESET) {
+		  if (buttonState[1] < 255) buttonState[1]++;
+	  }	else {
+		  if (buttonState[1] > 0) buttonState[1]--;
+	  }
+	  if (HAL_GPIO_ReadPin(PadLeft_GPIO_Port, PadLeft_Pin) == GPIO_PIN_RESET) {
+		  if (buttonState[2] < 255) buttonState[2]++;
+	  }	else {
+		  if (buttonState[2] > 0) buttonState[2]--;
+	  }
+	  if (HAL_GPIO_ReadPin(PadRight_GPIO_Port, PadRight_Pin) == GPIO_PIN_RESET) {
+		  if (buttonState[3] < 255) buttonState[3]++;
+	  }	else {
+		  if (buttonState[3] > 0) buttonState[3]--;
+	  }
+	  if (HAL_GPIO_ReadPin(PadA_GPIO_Port, PadA_Pin) == GPIO_PIN_RESET) {
+		  if (buttonState[4] < 255) buttonState[4]++;
+	  }	else {
+		  if (buttonState[4] > 0) buttonState[4]--;
+	  }
+	  if (HAL_GPIO_ReadPin(PadB_GPIO_Port, PadB_Pin) == GPIO_PIN_RESET) {
+		  if (buttonState[5] < 255) buttonState[5]++;
+	  }	else {
+		  if (buttonState[5] > 0) buttonState[5]--;
 	  }
 	  //if (spiBusy == 3) HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 
@@ -426,11 +478,17 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PadUp_Pin PadDown_Pin */
-  GPIO_InitStruct.Pin = PadUp_Pin|PadDown_Pin;
+  /*Configure GPIO pins : PadA_Pin PadB_Pin */
+  GPIO_InitStruct.Pin = PadA_Pin|PadB_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PadUp_Pin PadRight_Pin PadLeft_Pin PadDown_Pin */
+  GPIO_InitStruct.Pin = PadUp_Pin|PadRight_Pin|PadLeft_Pin|PadDown_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LED_Pin */
   GPIO_InitStruct.Pin = LED_Pin;
@@ -438,12 +496,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PadRight_Pin PadLeft_Pin PadB_Pin PadA_Pin */
-  GPIO_InitStruct.Pin = PadRight_Pin|PadLeft_Pin|PadB_Pin|PadA_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
 
@@ -503,7 +555,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (periodCounter) periodCounter--;
 }
 
-
+void SPI_SetOpenDrain() { // Added to stm32f0xx_hal_msp.c
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+	GPIO_InitStruct.Pin = SPI1_MOSI_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+	GPIO_InitStruct.Alternate = GPIO_AF0_SPI1;
+	HAL_GPIO_Init(SPI1_MOSI_GPIO_Port, &GPIO_InitStruct);
+}
 
 
 /* USER CODE END 4 */

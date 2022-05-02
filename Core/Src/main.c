@@ -34,6 +34,7 @@
 
 #define LEDS 144
 #define FRAMEBUFFER 1296
+#define LEDPACKET (FRAMEBUFFER + 64)
 
 /* USER CODE END PD */
 
@@ -52,31 +53,34 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-uint8_t framebuffer[1][FRAMEBUFFER];
-volatile uint8_t currentFramebuffer = 0;
+uint8_t framebuffer[LEDPACKET];
 volatile uint8_t spiBusy = 0;
-volatile uint8_t periodCounter = 99;
+volatile uint8_t msCounter = 0;
 
 const uint8_t colors[5][3] = {
 		{0, 0, 0},			// black
-		{255, 255, 255},	// white
-		{255, 0, 0},		// red
-		{0, 255, 0},		// green
-		{0, 0, 255}			// blue
+		{15, 15, 15},	// white
+		{15, 0, 0},		// red
+		{0, 15, 0},		// green
+		{0, 0, 15}			// blue
 };
 
 uint8_t buttonState[6];
 
 uint8_t backgroundColor = 0;
-uint8_t foregroundColor = 1;
-uint8_t currentGraphic = 0;
+uint8_t foregroundColor = 2;
+uint8_t currentGraphic = 4;
 
-int8_t carPlace[4] = {6, 3, 1, -1};
-uint8_t carSide[4] = {0, 1, 0, 1};
+uint8_t carAnim = 0;
+uint8_t curbAnim = 0;
+int8_t carPlace[6] = {8, 5, 3, 1, 8, 6};
+uint8_t carSide[6] = {0, 1, 2, 0, 1, 2};
+int8_t curbAnimation = 0;
 
-const uint8_t carSprites[2][6] = {
+const uint8_t carSprites[3][6] = {
 		{8, 9, 12, 27, 28, 31},		// left car
-		{6, 7, 14, 25, 26, 33}		// right car
+		{6, 7, 14, 25, 26, 33},		// middle car
+		{4, 5, 16, 23, 24, 35}		// right car
 };
 
 const uint8_t digits[10][7] = {
@@ -122,11 +126,11 @@ const uint8_t graphics[5][18] = {
 				0b00000000, 0b00000000
 		},
 		{		// track
-				0b00011100, 0b00100000, 0b00000000, 0b10000100,
-				0b00000000, 0b00010000, 0b10000000, 0b00000010,
-				0b00010000, 0b00000000, 0b01000010, 0b00000000,
-				0b00001000, 0b01000000, 0b00000001, 0b00001000,
-				0b00000000, 0b11100001
+				0b01110000, 0b00100000, 0b00000010, 0b00000100,
+				0b00000000, 0b01000000, 0b10000000, 0b00001000,
+				0b00010000, 0b00000001, 0b00000010, 0b00000000,
+				0b00100000, 0b01000000, 0b00000100, 0b00001000,
+				0b00000011, 0b10000001
 		}
 
 };
@@ -187,20 +191,18 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   for (uint16_t i=0; i<FRAMEBUFFER; i+=9) {
-	  framebuffer[currentFramebuffer][i+0] = 0b10010010; // G
-	  framebuffer[currentFramebuffer][i+1] = 0b01001001;
-	  framebuffer[currentFramebuffer][i+2] = 0b00100100;
-	  framebuffer[currentFramebuffer][i+3] = 0b10010010; // R
-	  framebuffer[currentFramebuffer][i+4] = 0b01001001;
-	  framebuffer[currentFramebuffer][i+5] = 0b00100100;
-	  framebuffer[currentFramebuffer][i+6] = 0b10010010; // B
-	  framebuffer[currentFramebuffer][i+7] = 0b01001001;
-	  framebuffer[currentFramebuffer][i+8] = 0b00100100;
+	  framebuffer[i+0] = 0b00100100; // G
+	  framebuffer[i+1] = 0b10010010;
+	  framebuffer[i+2] = 0b01001001;
+	  framebuffer[i+3] = 0b00100100; // R
+	  framebuffer[i+4] = 0b10010010;
+	  framebuffer[i+5] = 0b01001001;
+	  framebuffer[i+6] = 0b00100100; // B
+	  framebuffer[i+7] = 0b10010010;
+	  framebuffer[i+8] = 0b01001001;
   }
 
   HAL_TIM_Base_Start_IT(&htim14);
-
-  //HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
 
   /* USER CODE END 2 */
 
@@ -208,29 +210,46 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if (spiBusy == 0 && periodCounter == 0) {
-		  periodCounter = 9;
-		  //HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
-		  //HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-		  spiBusy = 1;
+	  if (msCounter) {
+		  msCounter = 0;
+		  carAnim++;
+		  curbAnim++;
+	  }
 
-		  if (buttonState[0] > 127) { // Up
+	  if (spiBusy == 0) {
 
+		  if (curbAnim > 14) {
+			  curbAnim -= 15;
+			  curbAnimation--;
+			  if (curbAnimation < 0) curbAnimation = 2;
 		  }
-		  if (buttonState[1] > 127) { // Down
 
-		  }
-		  if (buttonState[2] > 127) { // Left
+		  if (carAnim > 39) {
+			  carAnim -= 40;
 
-		  }
-		  if (buttonState[3] > 127) { // Right
+			  if (buttonState[0] > 127) { // Up
 
-		  }
-		  if (buttonState[4] > 127) { // A
+			  }
+			  if (buttonState[1] > 127) { // Down
 
-		  }
-		  if (buttonState[5] > 127) { // B
+			  }
+			  if (buttonState[2] > 127) { // Left
 
+			  }
+			  if (buttonState[3] > 127) { // Right
+
+			  }
+			  if (buttonState[4] > 127) { // A
+
+			  }
+			  if (buttonState[5] > 127) { // B
+
+			  }
+
+			  for (uint8_t car=0; car<6; car++) {
+				  carPlace[car]--;
+				  if (carPlace[car] < -2) carPlace[car] = 7;
+			  }
 		  }
 
 		  for (uint8_t i=0; i<LEDS; i++) {
@@ -242,17 +261,19 @@ int main(void)
 		  }
 
 		  if (currentGraphic == 4) {
-			  for (uint8_t car=0; car<4; car++) {
+			  for (uint8_t car=0; car<6; car++) {
 				  for (uint8_t i=0; i<6; i++) {
-					  if ((carSprites[carSide[car]][i]+(13*carPlace[car]) > 0) && (carSprites[carSide[car]][i]+(13*carPlace[car]) < 144)) {
-						  setPixelColor((carSprites[carSide[car]][i]+(13*carPlace[car])), 255, 255, 255);
-					  }
+					  setPixelColor((carSprites[carSide[car]][i]+(19*carPlace[car])), colors[3][0], colors[3][1], colors[3][2]);
 				  }
+			  }
+			  for (uint8_t p=0; p<3; p++) {
+				  setPixelColor(3+(19*curbAnimation)+(19*p*3), colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
+				  setPixelColor(10+(19*curbAnimation)+(19*p*3), colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
 			  }
 		  }
 
-		  HAL_SPI_Transmit_DMA(&hspi1, framebuffer[currentFramebuffer], FRAMEBUFFER);
-		  //HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+		  spiBusy = 1;
+		  HAL_SPI_Transmit_DMA(&hspi1, framebuffer, LEDPACKET);
 	  }
 
 	  if (HAL_GPIO_ReadPin(PadUp_GPIO_Port, PadUp_Pin) == GPIO_PIN_RESET) {
@@ -285,7 +306,6 @@ int main(void)
 	  }	else {
 		  if (buttonState[5] > 0) buttonState[5]--;
 	  }
-	  //if (spiBusy == 3) HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 
     /* USER CODE END WHILE */
 
@@ -368,7 +388,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi1.Init.CRCPolynomial = 7;
   hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
   if (HAL_SPI_Init(&hspi1) != HAL_OK)
   {
     Error_Handler();
@@ -502,6 +522,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 inline void setPixelColor(uint8_t p, uint8_t r, uint8_t g, uint8_t b) {
+	if (p > LEDS) return;
 
 	uint32_t er = 0;
 	er |= ((r&0b10000000)<<15);
@@ -534,15 +555,15 @@ inline void setPixelColor(uint8_t p, uint8_t r, uint8_t g, uint8_t b) {
 	eb |= ((b&0b00000001)<<1);
 
 	uint16_t i = p*9;
-	framebuffer[currentFramebuffer][i+0] = 0b10010010 | (eg>>16);
-	framebuffer[currentFramebuffer][i+1] = 0b01001001 | (eg>>8);
-	framebuffer[currentFramebuffer][i+2] = 0b00100100 | (eg);
-	framebuffer[currentFramebuffer][i+3] = 0b10010010 | (er>>16);
-	framebuffer[currentFramebuffer][i+4] = 0b01001001 | (er>>8);
-	framebuffer[currentFramebuffer][i+5] = 0b00100100 | (er);
-	framebuffer[currentFramebuffer][i+6] = 0b10010010 | (eb>>16);
-	framebuffer[currentFramebuffer][i+7] = 0b01001001 | (eb>>8);
-	framebuffer[currentFramebuffer][i+8] = 0b00100100 | (eb);
+	framebuffer[i+0] = 0b00100100 | ((eg>>16)&0xFF);
+	framebuffer[i+1] = 0b10010010 | ((eg>>8)&0xFF);
+	framebuffer[i+2] = 0b01001001 | ((eg)&0xFF);
+	framebuffer[i+3] = 0b00100100 | ((er>>16)&0xFF);
+	framebuffer[i+4] = 0b10010010 | ((er>>8)&0xFF);
+	framebuffer[i+5] = 0b01001001 | ((er)&0xFF);
+	framebuffer[i+6] = 0b00100100 | ((eb>>16)&0xFF);
+	framebuffer[i+7] = 0b10010010 | ((eb>>8)&0xFF);
+	framebuffer[i+8] = 0b01001001 | ((eb)&0xFF);
 
 }
 
@@ -552,7 +573,8 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (periodCounter) periodCounter--;
+	msCounter++;
+	//if (periodCounter > 100) periodCounter = 0;
 }
 
 void SPI_SetOpenDrain() { // Added to stm32f0xx_hal_msp.c

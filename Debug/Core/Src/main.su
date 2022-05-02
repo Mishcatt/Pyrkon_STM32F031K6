@@ -1,7 +1,7 @@
-../Core/Src/main.c:301:6:SystemClock_Config	96	static,ignoring_inline_asm
-../Core/Src/main.c:504:13:setPixelColor	48	static
-../Core/Src/main.c:159:5:main	56	static,ignoring_inline_asm
-../Core/Src/main.c:549:6:HAL_SPI_TxCpltCallback	0	static
-../Core/Src/main.c:554:6:HAL_TIM_PeriodElapsedCallback	0	static
-../Core/Src/main.c:558:6:SPI_SetOpenDrain	32	static
-../Core/Src/main.c:575:6:Error_Handler	0	static,ignoring_inline_asm
+../Core/Src/main.c:321:6:SystemClock_Config	96	static,ignoring_inline_asm
+../Core/Src/main.c:524:13:setPixelColor	48	static
+../Core/Src/main.c:163:5:main	64	static,ignoring_inline_asm
+../Core/Src/main.c:570:6:HAL_SPI_TxCpltCallback	0	static
+../Core/Src/main.c:575:6:HAL_TIM_PeriodElapsedCallback	0	static
+../Core/Src/main.c:580:6:SPI_SetOpenDrain	32	static
+../Core/Src/main.c:597:6:Error_Handler	0	static,ignoring_inline_asm

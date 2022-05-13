@@ -44,7 +44,10 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
- SPI_HandleTypeDef hspi1;
+ ADC_HandleTypeDef hadc;
+DMA_HandleTypeDef hdma_adc;
+
+SPI_HandleTypeDef hspi1;
 DMA_HandleTypeDef hdma_spi1_tx;
 
 TIM_HandleTypeDef htim14;
@@ -66,6 +69,8 @@ const uint8_t colors[5][3] = {
 };
 
 uint8_t buttonState[6];
+uint32_t adcBuffer[1] = {0};
+uint32_t randomNumber = 0;
 
 uint8_t backgroundColor = 0;
 uint8_t foregroundColor = 2;
@@ -144,10 +149,14 @@ static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM14_Init(void);
+static void MX_ADC_Init(void);
 /* USER CODE BEGIN PFP */
 
-void setPixelColor(uint8_t p, uint8_t r, uint8_t g, uint8_t b);
+void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b);
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi);
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
+void SPI_SetOpenDrain();
 
 /* USER CODE END PFP */
 
@@ -188,6 +197,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_SPI1_Init();
   MX_TIM14_Init();
+  MX_ADC_Init();
   /* USER CODE BEGIN 2 */
 
   for (uint16_t i=0; i<FRAMEBUFFER; i+=9) {
@@ -203,6 +213,7 @@ int main(void)
   }
 
   HAL_TIM_Base_Start_IT(&htim14);
+  HAL_ADC_Start_DMA(&hadc, adcBuffer, 1);
 
   /* USER CODE END 2 */
 
@@ -218,14 +229,14 @@ int main(void)
 
 	  if (spiBusy == 0) {
 
-		  if (curbAnim > 14) {
-			  curbAnim -= 15;
+		  if (curbAnim > 19) {
+			  curbAnim -= 20;
 			  curbAnimation--;
 			  if (curbAnimation < 0) curbAnimation = 2;
 		  }
 
-		  if (carAnim > 39) {
-			  carAnim -= 40;
+		  if (carAnim > 59) {
+			  carAnim -= 60;
 
 			  if (buttonState[0] > 127) { // Up
 
@@ -270,6 +281,14 @@ int main(void)
 				  setPixelColor(3+(19*curbAnimation)+(19*p*3), colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
 				  setPixelColor(10+(19*curbAnimation)+(19*p*3), colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
 			  }
+			  setPixelColor(2, 0, 0, (randomNumber >> 0) & 1);
+			  setPixelColor(21, 0, 0, (randomNumber >> 1) & 1);
+			  setPixelColor(40, 0, 0, (randomNumber >> 2) & 1);
+			  setPixelColor(59, 0, 0, (randomNumber >> 3) & 1);
+			  setPixelColor(78, 0, 0, (randomNumber >> 4) & 1);
+			  setPixelColor(97, 0, 0, (randomNumber >> 5) & 1);
+			  setPixelColor(116, 0, 0, (randomNumber >> 6) & 1);
+			  setPixelColor(135, 0, 0, (randomNumber >> 7) & 1);
 		  }
 
 		  spiBusy = 1;
@@ -327,9 +346,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSI14;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSI14State = RCC_HSI14_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.HSI14CalibrationValue = 16;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL5;
@@ -357,6 +378,60 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC_Init(void)
+{
+
+  /* USER CODE BEGIN ADC_Init 0 */
+
+  /* USER CODE END ADC_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC_Init 1 */
+
+  /* USER CODE END ADC_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc.Instance = ADC1;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc.Init.ContinuousConvMode = ENABLE;
+  hadc.Init.DiscontinuousConvMode = DISABLE;
+  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.DMAContinuousRequests = ENABLE;
+  hadc.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+  if (HAL_ADC_Init(&hadc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC_Init 2 */
+
+  /* USER CODE END ADC_Init 2 */
+
 }
 
 /**
@@ -475,6 +550,9 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
   /* DMA1_Channel2_3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
@@ -521,7 +599,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-inline void setPixelColor(uint8_t p, uint8_t r, uint8_t g, uint8_t b) {
+inline void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b) {
 	if (p > LEDS) return;
 
 	uint32_t er = 0;
@@ -575,6 +653,11 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	msCounter++;
 	//if (periodCounter > 100) periodCounter = 0;
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+	randomNumber <<= 1;
+	randomNumber |= adcBuffer[0] & 1;
 }
 
 void SPI_SetOpenDrain() { // Added to stm32f0xx_hal_msp.c

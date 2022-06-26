@@ -60,8 +60,8 @@ all: main-build
 main-build: Pyrkon_F031K6.elf secondary-outputs
 
 # Tool invocations
-Pyrkon_F031K6.elf Pyrkon_F031K6.map: $(OBJS) $(USER_OBJS) C:\Users\Mishcat\Documents\STM32\Pyrkon_F031K6\Pyrkon_F031K6\STM32F031K6TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Pyrkon_F031K6.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0 -T"C:\Users\Mishcat\Documents\STM32\Pyrkon_F031K6\Pyrkon_F031K6\STM32F031K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Pyrkon_F031K6.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Pyrkon_F031K6.elf Pyrkon_F031K6.map: $(OBJS) $(USER_OBJS) C:\Users\szneqz\Documents\STM32CubeIDE\Mishcat\Pyrkon_F031K6\STM32F031K6TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Pyrkon_F031K6.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0 -T"C:\Users\szneqz\Documents\STM32CubeIDE\Mishcat\Pyrkon_F031K6\STM32F031K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Pyrkon_F031K6.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

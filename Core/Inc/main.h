@@ -67,6 +67,8 @@ void Error_Handler(void);
 #define PadUp_GPIO_Port GPIOB
 #define PadRight_Pin GPIO_PIN_1
 #define PadRight_GPIO_Port GPIOB
+#define PadDown_Pin GPIO_PIN_12
+#define PadDown_GPIO_Port GPIOA
 #define SWDIO_Pin GPIO_PIN_13
 #define SWDIO_GPIO_Port GPIOA
 #define SWCLK_Pin GPIO_PIN_14
@@ -79,8 +81,6 @@ void Error_Handler(void);
 #define SPI1_MOSI_GPIO_Port GPIOB
 #define PadLeft_Pin GPIO_PIN_6
 #define PadLeft_GPIO_Port GPIOB
-#define PadDown_Pin GPIO_PIN_7
-#define PadDown_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

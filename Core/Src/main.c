@@ -32,10 +32,21 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-#define LEDS 144
-#define FRAMEBUFFER 1296
+#define LEDS (144)
+#define FRAMEBUFFER (1296)
 #define LEDPACKET (FRAMEBUFFER + 64)
-#define BUTTONHISTORY 19
+#define BUTTONHISTORY (19)
+#define CAR_TROPHY_SIZE (30)
+#define CAR_TRACK_SIZE (13)
+#define CAR_TRACK_DELAY (15)
+
+#define COLOR_BLACK {0, 0, 0}
+#define COLOR_RED {64, 0, 0}
+#define COLOR_ORANGE {64, 16, 0}
+#define COLOR_YELLOW {64, 64, 0}
+#define COLOR_GREEN {0, 32, 0}
+#define COLOR_BLUE {0, 0, 64}
+#define COLOR_PURPLE {32, 0, 32}
 
 enum myntStates {
 	MYNT_BOOT,
@@ -43,6 +54,13 @@ enum myntStates {
 	MYNT_BLINK,
 	MYNT_ALERT,
 	MYNT_RACE
+};
+
+enum carStates {
+	CAR_NORMAL,
+	CAR_EXPLODE,
+	CAR_SHOOT,
+	CAR_WINNER
 };
 
 enum buttons {
@@ -53,6 +71,25 @@ enum buttons {
 	BUTTON_LEFT = 0b00001000,
 	BUTTON_DOWN = 0b00010000,
 	BUTTON_UP = 0b00100000
+};
+
+enum myntGraphics {
+	MYNT_GRAPHIC_APPLE,
+	MYNT_GRAPHIC_OWO,
+	MYNT_GRAPHIC_BLINK1,
+	MYNT_GRAPHIC_BLINK2,
+	MYNT_GRAPHIC_BLINK3,
+	MYNT_GRAPHIC_UWU,
+	MYNT_GRAPHIC_TRACK,
+	MYNT_GRAPHIC_HAPPY,
+	MYNT_GRAPHIC_OK,
+	MYNT_GRAPHIC_NOK,
+	MYNT_GRAPHIC_HEART,
+	MYNT_GRAPHIC_BLUSH,
+	MYNT_GRAPHIC_STARS,
+	MYNT_GRAPHIC_BITMAP,
+	MYNT_GRAPHIC_QUESTION,
+	MYNT_GRAPHIC_TRIOPTIMUM
 };
 
 /* USER CODE END PD */
@@ -80,14 +117,18 @@ volatile uint8_t spiBusy = 0;
 volatile uint8_t msCounter = 0;
 
 const uint8_t colors[8][3] = {
-		{0, 0, 0},		// black
-		{63, 63, 63},	// white
-		{63, 0, 0},		// red
-		{0, 63, 0},		// green
-		{0, 0, 127},	// blue
-		{63, 0, 63},	// purple
-		{0, 63, 63},	// cyan
-		{63, 63, 0}		// yellow
+		{0, 0, 0},			// black
+		{128, 128, 128},	// white
+		{128, 0, 0},		// red
+		{0, 128, 0},		// green
+		{0, 0, 128},		// blue
+		{128, 0, 128},		// purple
+		{0, 128, 128},		// cyan
+		{128, 128, 0}		// yellow
+};
+
+const uint8_t lineNumber[16] = {
+		1, 11, 20, 30, 39, 49, 58, 68, 77, 87, 96, 106, 115, 125, 134, 144
 };
 
 uint8_t buttonState[6];
@@ -100,37 +141,82 @@ uint32_t adcBuffer[1] = {0};
 uint32_t randomNumber = 0;
 uint8_t randomBits = 0;
 
+uint8_t brightness = 2;
+uint8_t currentForegroundColor[3] = {0, 0, 0};
+uint8_t currentBackgroundColor[3] = {0, 0, 0};
+uint8_t allColorsBrightness[8][3] = {
+		{0, 0, 0},			// black
+		{128, 128, 128},	// white
+		{128, 0, 0},		// red
+		{0, 128, 0},		// green
+		{0, 0, 128},		// blue
+		{128, 0, 128},		// purple
+		{0, 128, 128},		// cyan
+		{128, 128, 0}		// yellow
+};
 uint8_t myntState = MYNT_BOOT;
 uint8_t backgroundColor = 0;
 uint8_t foregroundColor = 1;
 uint8_t previousColor = 1;
-uint8_t currentGraphic = 0;
+uint8_t currentGraphic = MYNT_GRAPHIC_APPLE;
+uint8_t currentBitmap = 0;
+uint8_t glitchFlag = 0;
+uint8_t lineCount = 0;
+uint8_t lineNoise = 0;
+uint8_t phaseGlitch = 0;
 
+uint8_t carState = CAR_NORMAL;
 uint8_t carAnim = 0;
 uint8_t curbAnim = 0;
-int8_t carPlace[6] = {0, 5, 3, 1, 8, 6};
-uint8_t carSide[6] = {1, 0, 2, 0, 1, 2};
+uint8_t carExplosionAnim = 0;
+uint8_t carSpeed = 32;
+int8_t carPlace[7] = {0, 24, 18, 12, 26, 22, 10};
+uint8_t carSide[7] = {1, 0, 0, 1, 1, 2, 2};
+uint8_t carColors[7] = {1, 2, 3, 4, 5, 6, 7};
 int8_t curbAnimation = 0;
 uint8_t carExplosionFrame = 0;
+uint8_t carExplosionRepeat = 0;
+uint8_t carExplosionDelay = 0;
+uint8_t carCurrentTrack = 0;
+uint8_t carTrackDelay = 0;
+uint8_t carCheats = CAR_NORMAL;
 uint8_t konamiCode = 0;
 
 uint32_t blinkDelay = 0;
 uint32_t blinkAnim = 0;
 uint8_t blinkState = 0;
 
-const uint8_t carSprites[12][6] = {
+const uint8_t carSprites[][6] = {
 		{8, 9, 12, 27, 28, 31},		// left car
 		{6, 7, 14, 25, 26, 33},		// middle car
 		{4, 5, 16, 23, 24, 35},		// right car
-		{8, 9, 27, 28, 28, 28},		// left car explosion 1
-		{6, 7, 25, 26, 26, 26},		// middle car explosion 1
-		{4, 5, 23, 24, 24, 24},		// right car explosion 1
+		{8, 9, 27, 28, 30, 32},		// left car explosion 1
+		{6, 7, 25, 26, 32, 34},		// middle car explosion 1
+		{4, 5, 23, 24, 34, 36},		// right car explosion 1
 		{11, 12, 13, 31, 31, 31},	// left car explosion 2
 		{13, 14, 15, 33, 33, 33},	// middle car explosion 2
 		{15, 16, 17, 35, 35, 35},	// right car explosion 2
-		{12, 12, 12, 12, 12, 12},	// left car explosion 3
-		{14, 14, 14, 14, 14, 14},	// middle car explosion 3
-		{16, 16, 16, 16, 16, 16}	// right car explosion 3
+		{8, 9, 27, 28, 28, 28},		// left car explosion 3
+		{6, 7, 25, 26, 26, 26},		// middle car explosion 3
+		{4, 5, 23, 24, 24, 24},		// right car explosion 3
+		{12, 12, 12, 12, 12, 12},	// left car explosion 4
+		{14, 14, 14, 14, 14, 14},	// middle car explosion 4
+		{16, 16, 16, 16, 16, 16},	// right car explosion 4
+		{0, 0, 0, 0, 0, 0},			// left car explosion 5
+		{0, 0, 0, 0, 0, 0},			// middle car explosion 5
+		{0, 0, 0, 0, 0, 0}			// right car explosion 5
+};
+
+const uint8_t carTrophy[CAR_TROPHY_SIZE] = {
+		128, 121, 120, 107, 108, 109, 110, 111,
+		103, 102, 101, 100, 89, 90, 91, 83,
+		82, 71, 64, 63, 52, 45, 44, 32,
+		33, 34, 27, 26, 25, 24
+};
+
+const uint8_t carTrack[CAR_TRACK_SIZE] = {
+		19, 21, 38, 39, 57, 59, 76, 77,
+		95, 97, 114, 115, 133
 };
 
 const uint8_t digits[10][7] = {
@@ -146,85 +232,140 @@ const uint8_t digits[10][7] = {
 		{78,  0, 95, 97, 113, 114, 116}		// 9
 };
 
-const uint8_t graphics[11][18] = {
-		{		// Appul
+const uint8_t graphics[][18] = {
+		{		// MYNT_GRAPHIC_APPLE
 				0b00000000, 0b00000000, 0b00000000, 0b00000000,
 				0b01010000, 0b00111100, 0b00011110, 0b00000011,
 				0b10000011, 0b11000000, 0b01110000, 0b01111000,
 				0b00011110, 0b00000101, 0b00000001, 0b00000000,
 				0b00100000, 0b00000000
 		},
-		{		// OwO
+		{		// MYNT_GRAPHIC_OWO
 				0b00000000, 0b00000010, 0b10000001, 0b11100000,
 				0b10101000, 0b00100100, 0b00000000, 0b00000000,
 				0b00000110, 0b00110010, 0b10010100, 0b00000000,
 				0b01010010, 0b10011000, 0b11000000, 0b00000000,
 				0b00000000, 0b00000000
 		},
-		{		// dwd
+		{		// MYNT_GRAPHIC_BLINK1
 				0b00000000, 0b00000010, 0b10000001, 0b11100000,
 				0b10101000, 0b00100100, 0b00000000, 0b00000000,
 				0b00000110, 0b00110010, 0b10010100, 0b00000000,
 				0b01110011, 0b10000000, 0b00000000, 0b00000000,
 				0b00000000, 0b00000000
 		},
-		{		// .w.
+		{		// MYNT_GRAPHIC_BLINK2
 				0b00000000, 0b00000010, 0b10000001, 0b11100000,
 				0b10101000, 0b00100100, 0b00000000, 0b00000000,
 				0b00000000, 0b00000011, 0b10011100, 0b00000000,
 				0b00000000, 0b00000000, 0b00000000, 0b00000000,
 				0b00000000, 0b00000000
 		},
-		{		// -w-
+		{		// MYNT_GRAPHIC_BLINK3
 				0b00000000, 0b00000010, 0b10000001, 0b11100000,
 				0b10101000, 0b00100100, 0b00000000, 0b00000000,
 				0b00000110, 0b00110010, 0b10010100, 0b00000000,
 				0b00000000, 0b00000000, 0b00000000, 0b00000000,
 				0b00000000, 0b00000000
 		},
-		{		// uwu
+		{		// MYNT_GRAPHIC_UWU
 				0b00000000, 0b00000010, 0b10000001, 0b11100000,
 				0b10101000, 0b00100100, 0b00000000, 0b00000000,
 				0b00000110, 0b00110010, 0b10010100, 0b00000000,
 				0b01010010, 0b10000000, 0b00000000, 0b00000000,
 				0b00000000, 0b00000000
 		},
-		{		// track
-				0b01110000, 0b00100000, 0b00000010, 0b00000100,
-				0b00000000, 0b01000000, 0b10000000, 0b00001000,
-				0b00010000, 0b00000001, 0b00000010, 0b00000000,
-				0b00100000, 0b01000000, 0b00000100, 0b00001000,
-				0b00000011, 0b10000001
+		{		// MYNT_GRAPHIC_TRACK
+				0b01100000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000011, 0b00000000
 		},
-		{		// ^w^
+		{		// MYNT_GRAPHIC_HAPPY
 				0b00000000, 0b00000010, 0b10000001, 0b11100000,
 				0b10101000, 0b00100100, 0b00000000, 0b00000000,
 				0b00000000, 0b00000010, 0b10010100, 0b11000110,
 				0b00100001, 0b00000000, 0b00000000, 0b00000000,
 				0b00000000, 0b00000000
 		},
-		{		// ok
+		{		// MYNT_GRAPHIC_OK
 				0b00000000, 0b00000000, 0b00000000, 0b01000000,
 				0b01100000, 0b00011100, 0b00011110, 0b00000110,
 				0b11000010, 0b01100001, 0b10000000, 0b00000110,
 				0b01100000, 0b00000000, 0b01000000, 0b00000000,
 				0b00000000, 0b00000000
 		},
-		{		// nok
+		{		// MYNT_GRAPHIC_NOK
 				0b00000000, 0b00000000, 0b00000010, 0b00010001,
 				0b10001100, 0b01100110, 0b00011011, 0b00000111,
 				0b10000001, 0b11000000, 0b11110000, 0b01101100,
 				0b00110011, 0b00011000, 0b11000100, 0b00100000,
 				0b00000000, 0b00000000
 		},
-		{		// serduszko
+		{		// MYNT_GRAPHIC_HEART
 				0b00000000, 0b00000001, 0b00000000, 0b11000000,
 				0b01110000, 0b00111100, 0b00011111, 0b00001111,
 				0b11000111, 0b11110011, 0b11111100, 0b11111110,
 				0b01111111, 0b10011101, 0b11000110, 0b01100000,
 				0b00000000, 0b00000000
+		},
+		{		// MYNT_GRAPHIC_BLUSH
+				0b00000000, 0b00000010, 0b10000001, 0b11100000,
+				0b10101000, 0b00100100, 0b00000000, 0b00000000,
+				0b00000100, 0b00010001, 0b00001000, 0b01000100,
+				0b00100001, 0b00010000, 0b01000000, 0b00000000,
+				0b00000000, 0b00000000
+		},
+		{		// MYNT_GRAPHIC_STARS
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000, 0b00010101, 0b00000000,
+				0b00000000, 0b00000000, 0b00000001, 0b01010101,
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000
+		},
+		{		// MYNT_GRAPHIC_BITMAP
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000
+		},
+		{		// MYNT_GRAPHIC_QUESTION
+				0b00000000, 0b00000001, 0b00000000, 0b00000000,
+				0b00000000, 0b00011000, 0b00001010, 0b00000000,
+				0b00000001, 0b00000000, 0b01100000, 0b00001000,
+				0b00000000, 0b00000101, 0b00000001, 0b10000000,
+				0b00000000, 0b00000000
+		},
+		{		// MYNT_GRAPHIC_TRIOPTIMUM
+				0b00000000, 0b00000000, 0b00000000, 0b11000000,
+				0b01010000, 0b00100100, 0b00011011, 0b00001111,
+				0b11000111, 0b01110011, 0b11111100, 0b00010000,
+				0b01011110, 0b10010111, 0b01000111, 0b11100000,
+				0b00000000, 0b00000000
 		}
 
+};
+
+const uint8_t bitmaps[1][144][3] = {
+	{
+		COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK,
+		COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE,
+		COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE, COLOR_PURPLE,
+		COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE,
+		COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE, COLOR_BLUE,
+		COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN,
+		COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN, COLOR_GREEN,
+		COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW,
+		COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW, COLOR_YELLOW,
+		COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE,
+		COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE, COLOR_ORANGE,
+		COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED,
+		COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED, COLOR_RED,
+		COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK,
+		COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+	}
 };
 
 /* USER CODE END PV */
@@ -240,6 +381,8 @@ static void MX_ADC_Init(void);
 /* USER CODE BEGIN PFP */
 
 void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b);
+uint32_t readPixelColor(uint16_t p);
+void addPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b);
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
@@ -375,15 +518,21 @@ int main(void)
 		  buttonHistory[4] == BUTTON_RIGHT && buttonHistory[3] == BUTTON_NONE &&
 		  buttonHistory[2] == BUTTON_B && buttonHistory[1] == BUTTON_NONE &&
 		  buttonHistory[0] == BUTTON_A) {
-		  konamiCode = 1;
+		  konamiCode ^= 1;
+		  buttonHistory[18] = BUTTON_NONE;
 		  //currentGraphic = 6;
 	  }
 
 	  if (msCounter) {
 		  msCounter--;
-		  if (currentGraphic == 6) {
+		  if (currentGraphic == MYNT_GRAPHIC_TRACK) {
 			  carAnim++;
-			  curbAnim++;
+			  if (carExplosionFrame > 0) {
+				  carExplosionAnim++;
+			  }
+			  if (carState != CAR_EXPLODE) {
+				  curbAnim++;
+			  }
 		  } else {
 			  blinkAnim++;
 		  }
@@ -392,55 +541,105 @@ int main(void)
 		  } else {
 			  buttonTime = 0;
 			  heldButton = tempButton;
-			  if (currentGraphic == 6) {
-				  if (tempButton == BUTTON_LEFT) {
-					  if (carSide[0] > 0) carSide[0]--;
+			  if (currentGraphic == MYNT_GRAPHIC_TRACK) {
+				  if (tempButton & BUTTON_A) {
+					  carSpeed = 16;
+				  } else {
+					  carSpeed = 32;
 				  }
-				  if (tempButton == BUTTON_RIGHT) {
-					  if (carSide[0] < 2) carSide[0]++;
+				  if ((tempButton & BUTTON_B) && (carState == CAR_WINNER)) {
+					  carState = CAR_NORMAL;
+					  konamiCode = 0;
+					  carCurrentTrack = 0;
+					  carTrackDelay = 0;
+				  }
+				  if (carState != CAR_EXPLODE) {
+					  if (tempButton & BUTTON_LEFT) {
+						  if (carSide[0] > 0) carSide[0]--;
+					  }
+					  if (tempButton & BUTTON_RIGHT) {
+						  if (carSide[0] < 2) carSide[0]++;
+					  }
 				  }
 			  } else {
 				  if (tempButton == (BUTTON_A | BUTTON_UP)) {
-					  currentGraphic = 8;
+					  currentGraphic = MYNT_GRAPHIC_OK;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
 					  foregroundColor = 3;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_DOWN)) {
-					  currentGraphic = 9;
+					  currentGraphic = MYNT_GRAPHIC_NOK;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
 					  foregroundColor = 2;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_LEFT)) {
-					  currentGraphic = 10;
+					  currentGraphic = MYNT_GRAPHIC_HEART;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
 					  foregroundColor = 5;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_RIGHT)) {
+					  currentGraphic = MYNT_GRAPHIC_QUESTION;
+					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
+					  foregroundColor = 7;
+					  myntState = MYNT_ALERT;
+				  }
+				  if (tempButton == (BUTTON_A | BUTTON_B | BUTTON_LEFT)) {
+					  currentGraphic = MYNT_GRAPHIC_STARS;
+					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
+					  foregroundColor = 1;
+					  myntState = MYNT_ALERT;
+				  }
+				  if (tempButton == (BUTTON_A | BUTTON_B | BUTTON_UP)) {
+					  currentGraphic = MYNT_GRAPHIC_TRIOPTIMUM;
+					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
+					  foregroundColor = 3;
+					  myntState = MYNT_ALERT;
+				  }
+				  if (tempButton == (BUTTON_A | BUTTON_B | BUTTON_DOWN)) {
+					  currentGraphic = MYNT_GRAPHIC_APPLE;
+					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
+					  foregroundColor = 1;
+					  myntState = MYNT_ALERT;
+				  }
+				  if (tempButton == (BUTTON_A | BUTTON_B | BUTTON_RIGHT)) {
+					  currentGraphic = MYNT_GRAPHIC_BITMAP;
+					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
+					  foregroundColor = 1;
+					  myntState = MYNT_ALERT;
+				  }
+				  if (tempButton == (BUTTON_B | BUTTON_RIGHT)) {
 					  foregroundColor++;
 					  if (foregroundColor > 7) foregroundColor = 1;
 				  }
+				  if (tempButton == (BUTTON_B | BUTTON_LEFT)) {
+					  glitchFlag ^= 1;
+				  }
+				  if (tempButton == (BUTTON_B | BUTTON_DOWN)) {
+					  brightness++;
+					  if (brightness > 5) brightness = 0;
+				  }
 				  if (tempButton == BUTTON_LEFT) {
-					  currentGraphic = 1;
+					  currentGraphic = MYNT_GRAPHIC_OWO;
 					  blinkDelay = 0;
 					  blinkAnim = 0;
 					  if (myntState == MYNT_ALERT) foregroundColor = previousColor;
 					  myntState = MYNT_BLINK;
 				  }
 				  if (tempButton == BUTTON_RIGHT) {
-					  currentGraphic = 2;
+					  currentGraphic = MYNT_GRAPHIC_BLUSH;
 					  if (myntState == MYNT_ALERT) foregroundColor = previousColor;
 					  myntState = MYNT_STATIC;
 				  }
 				  if (tempButton == BUTTON_UP) {
-					  currentGraphic = 7;
+					  currentGraphic = MYNT_GRAPHIC_HAPPY;
 					  if (myntState == MYNT_ALERT) foregroundColor = previousColor;
 					  myntState = MYNT_STATIC;
 				  }
 				  if (tempButton == BUTTON_DOWN) {
-					  currentGraphic = 5;
+					  currentGraphic = MYNT_GRAPHIC_UWU;
 					  if (myntState == MYNT_ALERT) foregroundColor = previousColor;
 					  myntState = MYNT_STATIC;
 				  }
@@ -450,66 +649,205 @@ int main(void)
 		  }
 		  if (buttonTime > 100) {
 			  if (tempButton == 0b00111101) {
-				  currentGraphic = 0;
+				  currentGraphic = MYNT_GRAPHIC_APPLE;
 				  myntState = MYNT_STATIC;
 			  }
 			  if (tempButton == 0b00110001) {
-				  currentGraphic = 1;
+				  currentGraphic = MYNT_GRAPHIC_OWO;
 				  myntState = MYNT_BLINK;
 			  }
 			  if (tempButton == 0b00001101) {
-				  currentGraphic = 6;
+				  currentGraphic = MYNT_GRAPHIC_TRACK;
+				  foregroundColor = 1;
 				  myntState = MYNT_RACE;
+				  carState = CAR_NORMAL;
+				  konamiCode = 0;
+				  carCurrentTrack = 0;
+				  carTrackDelay = 0;
 			  }
 		  }
 	  }
 
 	  if (spiBusy == 0) {
+		  for (uint8_t i=0; i<8; i++) {
+			  allColorsBrightness[i][0] = colors[i][0] >> brightness;
+			  allColorsBrightness[i][1] = colors[i][1] >> brightness;
+			  allColorsBrightness[i][2] = colors[i][2] >> brightness;
+		  }
 
-		  for (uint8_t i=0; i<LEDS; i++) {
-			  if (graphics[currentGraphic][i/8] & (0x80 >> i%8)) {
-				  setPixelColor(i, colors[foregroundColor][0], colors[foregroundColor][1], colors[foregroundColor][2]);
-			  } else {
-				  setPixelColor(i, colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
-				  //setPixelColor(i, colors[blinkAnim%8][0], colors[blinkAnim%8][1], colors[blinkAnim%8][2]);
+		  currentForegroundColor[0] = allColorsBrightness[foregroundColor][0];
+		  currentForegroundColor[1] = allColorsBrightness[foregroundColor][1];
+		  currentForegroundColor[2] = allColorsBrightness[foregroundColor][2];
+		  currentBackgroundColor[0] = allColorsBrightness[backgroundColor][0];
+		  currentBackgroundColor[1] = allColorsBrightness[backgroundColor][1];
+		  currentBackgroundColor[2] = allColorsBrightness[backgroundColor][2];
+
+		  if (currentGraphic == MYNT_GRAPHIC_BITMAP) {
+			  for (uint8_t i=0; i<LEDS; i++) { // Rysuj piksele z wybranej bitmapy
+				  setPixelColor(i+(phaseGlitch), bitmaps[currentBitmap][i][0], bitmaps[currentBitmap][i][1], bitmaps[currentBitmap][i][2]);
+			  }
+		  } else {
+			  for (uint8_t i=0; i<LEDS; i++) { // Rysuj piksele z wybranej grafiki
+				  if (graphics[currentGraphic][i/8] & (0x80 >> i%8)) {
+					  setPixelColor(i+(phaseGlitch), currentForegroundColor[0], currentForegroundColor[1], currentForegroundColor[2]);
+				  } else {
+					  setPixelColor(i+(phaseGlitch), currentBackgroundColor[0], currentBackgroundColor[1], currentBackgroundColor[2]);
+					  //setPixelColor(i, colors[blinkAnim%8][0], colors[blinkAnim%8][1], colors[blinkAnim%8][2]);
+				  }
 			  }
 		  }
 
-		  if (currentGraphic == 6) {
-			  if (curbAnim > 9) {
-				  curbAnim -= 10;
+		  if (currentGraphic == MYNT_GRAPHIC_TRACK) { // Dodatkowe grafiki samochodów
+			  if (curbAnim >= (carSpeed>>(2+konamiCode))) {
+				  curbAnim -= (carSpeed>>(2+konamiCode));
 				  curbAnimation--;
 				  if (curbAnimation < 0) curbAnimation = 3;
 			  }
 
-			  if (carAnim > 59) {
-				  carAnim -= 60;
+			  if (carState == CAR_NORMAL) {
+				  for (uint8_t car=1; car<7; car++) {
+					  if (carSide[car] == carSide[0]) {
+						  if (carPlace[car] < 2 && carPlace[car] > -2) {
+							  if (konamiCode == 0) {
+								  carState = CAR_EXPLODE;
+								  carColors[0] = 2;
+							  }
+							  if (carExplosionFrame == 0) carExplosionFrame = 3;
+						  }
+					  }
+				  }
+			  }
 
-				  for (uint8_t car=1; car<6; car++) {
-					  carPlace[car]--;
-					  if (carPlace[car] < -2) carPlace[car] = 7;
+			  if (carExplosionFrame > 0) {
+				  if (carExplosionAnim > 4) {
+					  carExplosionAnim -= 5;
+					  carExplosionFrame += 3;
+					  if (carExplosionRepeat < 5 && carExplosionFrame > 9) {
+						  carExplosionRepeat++;
+						  carExplosionFrame = 3;
+					  }
+					  if (carExplosionFrame > 15) {
+						  if (carState == CAR_EXPLODE) {
+							  if (carExplosionDelay < 10) {
+								  carExplosionDelay++;
+								  carExplosionFrame = 15;
+							  } else {
+								  carExplosionDelay = 0;
+								  carExplosionFrame = 0;
+								  carExplosionRepeat = 0;
+								  carSide[0] = 1;
+								  carPlace[1] = 24;
+								  carPlace[2] = 18;
+								  carPlace[3] = 12;
+								  carPlace[4] = 26;
+								  carPlace[5] = 22;
+								  carPlace[6] = 10;
+								  carState = CAR_NORMAL;
+								  carCurrentTrack = 0;
+								  carTrackDelay = 0;
+								  carColors[0] = 1;
+							  }
+						  } else {
+							  carExplosionFrame = 0;
+							  carExplosionRepeat = 0;
+						  }
+					  }
 				  }
 			  }
-			  for (uint8_t car=1; car<6; car++) {
-				  for (uint8_t i=0; i<6; i++) {
-					  setPixelColor((carSprites[carSide[car]][i]+(19*carPlace[car])), colors[3][0], colors[3][1], colors[3][2]);
+
+			  if (carAnim >= (carSpeed>>konamiCode)) {
+				  carAnim -= (carSpeed>>konamiCode);
+
+				  if (carState == CAR_NORMAL) carTrackDelay++;
+				  if (carTrackDelay >= CAR_TRACK_DELAY) {
+					  carTrackDelay -= CAR_TRACK_DELAY;
+					  if (carCurrentTrack < (CAR_TRACK_SIZE-1)) {
+						  carCurrentTrack++;
+					  } else {
+						  carCurrentTrack = CAR_TRACK_SIZE;
+						  carState = CAR_WINNER;
+					  }
+				  }
+
+
+				  if (carState == CAR_NORMAL) {
+					  for (uint8_t car=1; car<7; car++) {
+						  carPlace[car]--;
+						  if (carPlace[car] < -2) {
+							  carColors[car] = 2+(adcBuffer[0]%6);
+							  carPlace[car] = 10+(adcBuffer[0]&0x7)+carSide[car];
+							  for (uint8_t i=1; i<7; i++) {
+								  if (i == car) continue;
+								  if ( (carPlace[car] <= (carPlace[i]+2)) && (carPlace[car] >= (carPlace[i]-2)) ) {
+									  carPlace[car] = (carPlace[i]+3) + (adcBuffer[0]&0x3);
+								  }
+							  }
+							  if ((car&1) > 0) { // odd car
+								  if ( (carPlace[car] <= (carPlace[car+1]+2)) && (carPlace[car] >= (carPlace[car+1]-2)) ) {
+									  carPlace[car] = (carPlace[car+1]+3) + (adcBuffer[0]&0x3);
+								  }
+							  } else { // even car
+								  if ( (carPlace[car] <= (carPlace[car-1]+2)) && (carPlace[car] >= (carPlace[car-1]-2)) ) {
+									  carPlace[car] = (carPlace[car-1]+3) + (adcBuffer[0]&0x3);
+								  }
+							  }
+							  uint8_t carParallelCount = 0;
+							  for (uint8_t i=1; i<7; i++) {
+								  if (i == car) continue;
+								  if ( (carPlace[car] <= (carPlace[i]+6)) && (carPlace[car] >= (carPlace[i]-6)) ) {
+									  carParallelCount++;
+								  }
+							  }
+							  while (carParallelCount > 1) {
+								  carParallelCount = 0;
+								  carPlace[car] += 1;
+								  for (uint8_t i=1; i<7; i++) {
+									  if (i == car) continue;
+									  if ( (carPlace[car] <= (carPlace[i]+5)) && (carPlace[car] >= (carPlace[i]-5)) ) {
+										  carParallelCount++;
+									  }
+								  }
+							  }
+							  //while(1) {
+							  //  uint8_t parallelCars = 0;
+							  //  if (carPlace[1] - carPlace[2] == 0) parallelCars++;
+							  //}
+						  }
+					  }
 				  }
 			  }
-			  for (uint8_t i=0; i<6; i++) {
-				  setPixelColor((carSprites[carSide[0]+carExplosionFrame][i]+(19*carPlace[0])), colors[3][0], colors[3][1], colors[3][2]);
+			  for (uint8_t i=0; i<carCurrentTrack; i++) {
+				  setPixelColor(carTrack[i]+phaseGlitch, currentForegroundColor[0], currentForegroundColor[1], currentForegroundColor[2]);
 			  }
-			  for (uint8_t p=0; p<2; p++) { // TODO
-				  setPixelColor(3+(19*curbAnimation)+(19*p*4), colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
-				  setPixelColor(10+(19*curbAnimation)+(19*p*4), colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
-				  setPixelColor(3+(19*(curbAnimation+1))+(19*p*4), colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
-				  setPixelColor(10+(19*(curbAnimation+1))+(19*p*4), colors[backgroundColor][0], colors[backgroundColor][1], colors[backgroundColor][2]);
+			  if (carState != CAR_WINNER) {
+				  for (uint8_t car=1; car<7; car++) { // enemy cars
+					  for (uint8_t i=0; i<6; i++) {
+						  setPixelColor((carSprites[carSide[car]][i]+(19*carPlace[car]))+phaseGlitch, allColorsBrightness[carColors[car]][0], allColorsBrightness[carColors[car]][1], allColorsBrightness[carColors[car]][2]);
+					  }
+				  }
+				  if (carExplosionFrame > 0) { // clear player car space
+					  for (uint8_t i=0; i<6; i++) {
+						  setPixelColor((carSprites[carSide[0]][i]+(19*carPlace[0]))+phaseGlitch, currentBackgroundColor[0], currentBackgroundColor[1], currentBackgroundColor[2]);
+					  }
+				  }
+				  for (uint8_t i=0; i<6; i++) { // player car
+					  setPixelColor((carSprites[carSide[0]+carExplosionFrame][i]+(19*carPlace[0]))+phaseGlitch, allColorsBrightness[carColors[0]+konamiCode][0], allColorsBrightness[carColors[0]+konamiCode][1], allColorsBrightness[carColors[0]+konamiCode][2]);
+				  }
+				  for (uint8_t p=0; p<2; p++) {
+					  setPixelColor(3+(19*curbAnimation)+(19*p*4)+phaseGlitch, currentForegroundColor[0], currentForegroundColor[1], currentForegroundColor[2]);
+					  setPixelColor(10+(19*curbAnimation)+(19*p*4)+phaseGlitch, currentForegroundColor[0], currentForegroundColor[1], currentForegroundColor[2]);
+				  }
+			  } else {
+				  for (uint8_t i=0; i<CAR_TROPHY_SIZE; i++) {
+					  setPixelColor(carTrophy[i]+phaseGlitch, allColorsBrightness[7-konamiCode][0], allColorsBrightness[7-konamiCode][1], allColorsBrightness[7-konamiCode][2]);
+				  }
 			  }
-		  } else {
+		  } else { // klatki animacji
 			  if (myntState == MYNT_BLINK) {
 				  switch (blinkState) {
 				  case 0:
 					  if (blinkAnim > blinkDelay) {
-						  currentGraphic = 2;
+						  currentGraphic = MYNT_GRAPHIC_BLINK1;
 						  blinkState = 1;
 						  blinkAnim -= blinkDelay;
 						  blinkDelay = 8;
@@ -517,7 +855,7 @@ int main(void)
 					  break;
 				  case 1:
 					  if (blinkAnim > blinkDelay) {
-						  currentGraphic = 3;
+						  currentGraphic = MYNT_GRAPHIC_BLINK2;
 						  blinkState = 2;
 						  blinkAnim -= blinkDelay;
 						  blinkDelay = 16;
@@ -525,21 +863,21 @@ int main(void)
 					  break;
 				  case 2:
 					  if (blinkAnim > blinkDelay) {
-						  currentGraphic = 4;
+						  currentGraphic = MYNT_GRAPHIC_BLINK3;
 						  blinkState = 3;
 						  blinkAnim -= blinkDelay;
 						  blinkDelay = 8;
 					  }
 				  case 3:
 					  if (blinkAnim > blinkDelay) {
-						  currentGraphic = 5;
+						  currentGraphic = MYNT_GRAPHIC_UWU;
 						  blinkState = 4;
 						  blinkAnim -= blinkDelay;
 						  blinkDelay = 8;
 					  }
 				  case 4:
 					  if (blinkAnim > blinkDelay) {
-						  currentGraphic = 1;
+						  currentGraphic = MYNT_GRAPHIC_OWO;
 						  blinkState = 0;
 						  blinkAnim -= blinkDelay;
 						  blinkDelay = (randomNumber & 0x3FF);
@@ -550,6 +888,37 @@ int main(void)
 				  }
 			  }
 		  }
+
+		  if (glitchFlag > 0) {
+			  // efekt szumu
+			  uint8_t staticNoise = adcBuffer[0]&0x1;
+			  for (uint8_t i=0; i<LEDS; i += (adcBuffer[0]&0x3F)) {
+				  addPixelColor(i, staticNoise, staticNoise, staticNoise);
+			  }
+
+			  // efekt linii
+			  if (phaseGlitch > 0) phaseGlitch = 0;
+
+			  lineNoise += adcBuffer[0]&1;
+			  lineCount++;
+			  if (lineCount >= 32) {
+				  //phaseGlitch = 0;
+				  if (lineNoise >= 16) {
+					  lineNoise -= 16;
+					  //phaseGlitch = 1;
+					  for (uint8_t i=lineNumber[lineNoise]; i<lineNumber[lineNoise+1]; i += 1) {
+						  addPixelColor(i, 15, 15, 15);
+					  }
+				  }
+				  lineCount = 0;
+				  lineNoise = 0;
+			  }
+		  } else {
+			  lineCount = 0;
+			  lineNoise = 0;
+			  phaseGlitch = 0;
+		  }
+
 
 		  /*if (tempButton & BUTTON_UP) setPixelColor(1, 63, 0, 0);
 		  if (tempButton & BUTTON_DOWN) setPixelColor(20, 63, 0, 0);
@@ -882,7 +1251,123 @@ inline void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b) {
 	framebuffer[i+6] = 0b00100100 | ((eb>>16)&0xFF);
 	framebuffer[i+7] = 0b10010010 | ((eb>>8)&0xFF);
 	framebuffer[i+8] = 0b01001001 | ((eb)&0xFF);
+}
 
+/*
+ * Returns 0x0RGB, 0x1000 if no pixel
+ */
+inline uint32_t readPixelColor(uint16_t p) {
+	if (p > LEDS) return 0x1000;
+
+	uint16_t i = p*9;
+	uint32_t rgb = 0;
+	//                                          00000000RRRRRRRRGGGGGGGGBBBBBBBB
+	if (framebuffer[i+0] & 0b01000000) rgb |= 0b00000000000000001000000000000000;
+	if (framebuffer[i+0] & 0b00001000) rgb |= 0b00000000000000000100000000000000;
+	if (framebuffer[i+0] & 0b00000001) rgb |= 0b00000000000000000010000000000000;
+	if (framebuffer[i+1] & 0b00100000) rgb |= 0b00000000000000000001000000000000;
+	if (framebuffer[i+1] & 0b00000100) rgb |= 0b00000000000000000000100000000000;
+	if (framebuffer[i+2] & 0b10000000) rgb |= 0b00000000000000000000010000000000;
+	if (framebuffer[i+2] & 0b00010000) rgb |= 0b00000000000000000000001000000000;
+	if (framebuffer[i+2] & 0b00000010) rgb |= 0b00000000000000000000000100000000;
+	if (framebuffer[i+3] & 0b01000000) rgb |= 0b00000000100000000000000000000000;
+	if (framebuffer[i+3] & 0b00001000) rgb |= 0b00000000010000000000000000000000;
+	if (framebuffer[i+3] & 0b00000001) rgb |= 0b00000000001000000000000000000000;
+	if (framebuffer[i+4] & 0b00100000) rgb |= 0b00000000000100000000000000000000;
+	if (framebuffer[i+4] & 0b00000100) rgb |= 0b00000000000010000000000000000000;
+	if (framebuffer[i+5] & 0b10000000) rgb |= 0b00000000000001000000000000000000;
+	if (framebuffer[i+5] & 0b00010000) rgb |= 0b00000000000000100000000000000000;
+	if (framebuffer[i+5] & 0b00000010) rgb |= 0b00000000000000010000000000000000;
+	if (framebuffer[i+6] & 0b01000000) rgb |= 0b00000000000000000000000010000000;
+	if (framebuffer[i+6] & 0b00001000) rgb |= 0b00000000000000000000000001000000;
+	if (framebuffer[i+6] & 0b00000001) rgb |= 0b00000000000000000000000000100000;
+	if (framebuffer[i+7] & 0b00100000) rgb |= 0b00000000000000000000000000010000;
+	if (framebuffer[i+7] & 0b00000100) rgb |= 0b00000000000000000000000000001000;
+	if (framebuffer[i+8] & 0b10000000) rgb |= 0b00000000000000000000000000000100;
+	if (framebuffer[i+8] & 0b00010000) rgb |= 0b00000000000000000000000000000010;
+	if (framebuffer[i+8] & 0b00000010) rgb |= 0b00000000000000000000000000000001;
+
+	return rgb;
+}
+
+inline void addPixelColor(uint16_t p, uint8_t ri, uint8_t gi, uint8_t bi) {
+	if (p > LEDS) return;
+
+	uint16_t i = p*9;
+	uint16_t r = 0;
+	uint16_t g = 0;
+	uint16_t b = 0;
+	if (framebuffer[i+0] & 0b01000000) g |= 0b10000000;
+	if (framebuffer[i+0] & 0b00001000) g |= 0b01000000;
+	if (framebuffer[i+0] & 0b00000001) g |= 0b00100000;
+	if (framebuffer[i+1] & 0b00100000) g |= 0b00010000;
+	if (framebuffer[i+1] & 0b00000100) g |= 0b00001000;
+	if (framebuffer[i+2] & 0b10000000) g |= 0b00000100;
+	if (framebuffer[i+2] & 0b00010000) g |= 0b00000010;
+	if (framebuffer[i+2] & 0b00000010) g |= 0b00000001;
+	if (framebuffer[i+3] & 0b01000000) r |= 0b10000000;
+	if (framebuffer[i+3] & 0b00001000) r |= 0b01000000;
+	if (framebuffer[i+3] & 0b00000001) r |= 0b00100000;
+	if (framebuffer[i+4] & 0b00100000) r |= 0b00010000;
+	if (framebuffer[i+4] & 0b00000100) r |= 0b00001000;
+	if (framebuffer[i+5] & 0b10000000) r |= 0b00000100;
+	if (framebuffer[i+5] & 0b00010000) r |= 0b00000010;
+	if (framebuffer[i+5] & 0b00000010) r |= 0b00000001;
+	if (framebuffer[i+6] & 0b01000000) b |= 0b10000000;
+	if (framebuffer[i+6] & 0b00001000) b |= 0b01000000;
+	if (framebuffer[i+6] & 0b00000001) b |= 0b00100000;
+	if (framebuffer[i+7] & 0b00100000) b |= 0b00010000;
+	if (framebuffer[i+7] & 0b00000100) b |= 0b00001000;
+	if (framebuffer[i+8] & 0b10000000) b |= 0b00000100;
+	if (framebuffer[i+8] & 0b00010000) b |= 0b00000010;
+	if (framebuffer[i+8] & 0b00000010) b |= 0b00000001;
+
+	r += ri;
+	if (r > 255) r = 255;
+	g += gi;
+	if (g > 255) g = 255;
+	b += bi;
+	if (b > 255) b = 255;
+
+	uint32_t er = 0;
+	er |= ((r&0b10000000)<<15);
+	er |= ((r&0b01000000)<<13);
+	er |= ((r&0b00100000)<<11);
+	er |= ((r&0b00010000)<<9);
+	er |= ((r&0b00001000)<<7);
+	er |= ((r&0b00000100)<<5);
+	er |= ((r&0b00000010)<<3);
+	er |= ((r&0b00000001)<<1);
+
+	uint32_t eg = 0;
+	eg |= ((g&0b10000000)<<15);
+	eg |= ((g&0b01000000)<<13);
+	eg |= ((g&0b00100000)<<11);
+	eg |= ((g&0b00010000)<<9);
+	eg |= ((g&0b00001000)<<7);
+	eg |= ((g&0b00000100)<<5);
+	eg |= ((g&0b00000010)<<3);
+	eg |= ((g&0b00000001)<<1);
+
+	uint32_t eb = 0;
+	eb |= ((b&0b10000000)<<15);
+	eb |= ((b&0b01000000)<<13);
+	eb |= ((b&0b00100000)<<11);
+	eb |= ((b&0b00010000)<<9);
+	eb |= ((b&0b00001000)<<7);
+	eb |= ((b&0b00000100)<<5);
+	eb |= ((b&0b00000010)<<3);
+	eb |= ((b&0b00000001)<<1);
+
+	framebuffer[i+0] = 0b00100100 | ((eg>>16)&0xFF);
+	framebuffer[i+1] = 0b10010010 | ((eg>>8)&0xFF);
+	framebuffer[i+2] = 0b01001001 | ((eg)&0xFF);
+	framebuffer[i+3] = 0b00100100 | ((er>>16)&0xFF);
+	framebuffer[i+4] = 0b10010010 | ((er>>8)&0xFF);
+	framebuffer[i+5] = 0b01001001 | ((er)&0xFF);
+	framebuffer[i+6] = 0b00100100 | ((eb>>16)&0xFF);
+	framebuffer[i+7] = 0b10010010 | ((eb>>8)&0xFF);
+	framebuffer[i+8] = 0b01001001 | ((eb)&0xFF);
 }
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {

@@ -48,6 +48,17 @@
 #define COLOR_BLUE {0, 0, 64}
 #define COLOR_PURPLE {32, 0, 32}
 
+enum myntColors {
+	FOREGROUND_BLACK,
+	FOREGROUND_WHITE,
+	FOREGROUND_RED,
+	FOREGROUND_GREEN,
+	FOREGROUND_BLUE,
+	FOREGROUND_PURPLE,
+	FOREGROUND_CYAN,
+	FOREGROUND_YELLOW
+};
+
 enum myntStates {
 	MYNT_BOOT,
 	MYNT_STATIC,
@@ -156,7 +167,7 @@ uint8_t allColorsBrightness[8][3] = {
 };
 uint8_t myntState = MYNT_BOOT;
 uint8_t backgroundColor = 0;
-uint8_t foregroundColor = 1;
+uint8_t foregroundColor = FOREGROUND_WHITE;
 uint8_t previousColor = 1;
 uint8_t currentGraphic = MYNT_GRAPHIC_APPLE;
 uint8_t currentBitmap = 0;
@@ -543,9 +554,9 @@ int main(void)
 			  heldButton = tempButton;
 			  if (currentGraphic == MYNT_GRAPHIC_TRACK) {
 				  if (tempButton & BUTTON_A) {
-					  carSpeed = 16;
+					  carSpeed = 16 - carCurrentTrack;
 				  } else {
-					  carSpeed = 32;
+					  carSpeed = 32 - carCurrentTrack;
 				  }
 				  if ((tempButton & BUTTON_B) && (carState == CAR_WINNER)) {
 					  carState = CAR_NORMAL;
@@ -565,49 +576,49 @@ int main(void)
 				  if (tempButton == (BUTTON_A | BUTTON_UP)) {
 					  currentGraphic = MYNT_GRAPHIC_OK;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
-					  foregroundColor = 3;
+					  foregroundColor = FOREGROUND_GREEN;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_DOWN)) {
 					  currentGraphic = MYNT_GRAPHIC_NOK;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
-					  foregroundColor = 2;
+					  foregroundColor = FOREGROUND_RED;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_LEFT)) {
 					  currentGraphic = MYNT_GRAPHIC_HEART;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
-					  foregroundColor = 5;
+					  foregroundColor = FOREGROUND_PURPLE;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_RIGHT)) {
 					  currentGraphic = MYNT_GRAPHIC_QUESTION;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
-					  foregroundColor = 7;
+					  foregroundColor = FOREGROUND_YELLOW;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_B | BUTTON_LEFT)) {
 					  currentGraphic = MYNT_GRAPHIC_STARS;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
-					  foregroundColor = 1;
+					  foregroundColor = FOREGROUND_WHITE;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_B | BUTTON_UP)) {
 					  currentGraphic = MYNT_GRAPHIC_TRIOPTIMUM;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
-					  foregroundColor = 3;
+					  foregroundColor = FOREGROUND_GREEN;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_B | BUTTON_DOWN)) {
 					  currentGraphic = MYNT_GRAPHIC_APPLE;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
-					  foregroundColor = 1;
+					  foregroundColor = FOREGROUND_WHITE;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_A | BUTTON_B | BUTTON_RIGHT)) {
 					  currentGraphic = MYNT_GRAPHIC_BITMAP;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
-					  foregroundColor = 1;
+					  foregroundColor = FOREGROUND_WHITE;
 					  myntState = MYNT_ALERT;
 				  }
 				  if (tempButton == (BUTTON_B | BUTTON_RIGHT)) {
@@ -617,9 +628,11 @@ int main(void)
 				  if (tempButton == (BUTTON_B | BUTTON_LEFT)) {
 					  glitchFlag ^= 1;
 				  }
+				  if (tempButton == (BUTTON_B | BUTTON_UP)) {
+					  if (brightness > 0) brightness--;
+				  }
 				  if (tempButton == (BUTTON_B | BUTTON_DOWN)) {
-					  brightness++;
-					  if (brightness > 5) brightness = 0;
+					  if (brightness < 7) brightness++;
 				  }
 				  if (tempButton == BUTTON_LEFT) {
 					  currentGraphic = MYNT_GRAPHIC_OWO;
@@ -658,7 +671,7 @@ int main(void)
 			  }
 			  if (tempButton == 0b00001101) {
 				  currentGraphic = MYNT_GRAPHIC_TRACK;
-				  foregroundColor = 1;
+				  foregroundColor = FOREGROUND_WHITE;
 				  myntState = MYNT_RACE;
 				  carState = CAR_NORMAL;
 				  konamiCode = 0;
@@ -746,6 +759,7 @@ int main(void)
 								  carCurrentTrack = 0;
 								  carTrackDelay = 0;
 								  carColors[0] = 1;
+								  carSpeed = 32;
 							  }
 						  } else {
 							  carExplosionFrame = 0;

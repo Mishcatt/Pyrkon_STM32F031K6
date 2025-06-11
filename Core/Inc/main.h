@@ -41,6 +41,26 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+enum myntColors {
+	FOREGROUND_BLACK,
+	FOREGROUND_WHITE,
+	FOREGROUND_RED,
+	FOREGROUND_GREEN,
+	FOREGROUND_BLUE,
+	FOREGROUND_PURPLE,
+	FOREGROUND_CYAN,
+	FOREGROUND_YELLOW
+};
+
+enum myntStates {
+	MYNT_BOOT,
+	MYNT_STATIC,
+	MYNT_BLINK,
+	MYNT_ALERT,
+	MYNT_RACE,
+	MYNT_CHECKERS
+};
+
 
 /* USER CODE END EC */
 
@@ -53,6 +73,8 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b);
+void setPixelColorNumber(uint16_t p, uint8_t n);
 
 /* USER CODE END EFP */
 

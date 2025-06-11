@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "checkers.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,25 +47,7 @@
 #define COLOR_GREEN {0, 32, 0}
 #define COLOR_BLUE {0, 0, 64}
 #define COLOR_PURPLE {32, 0, 32}
-
-enum myntColors {
-	FOREGROUND_BLACK,
-	FOREGROUND_WHITE,
-	FOREGROUND_RED,
-	FOREGROUND_GREEN,
-	FOREGROUND_BLUE,
-	FOREGROUND_PURPLE,
-	FOREGROUND_CYAN,
-	FOREGROUND_YELLOW
-};
-
-enum myntStates {
-	MYNT_BOOT,
-	MYNT_STATIC,
-	MYNT_BLINK,
-	MYNT_ALERT,
-	MYNT_RACE
-};
+#define ALL_COLORS_COUNT (8)
 
 enum carStates {
 	CAR_NORMAL,
@@ -101,7 +83,8 @@ enum myntGraphics {
 	MYNT_GRAPHIC_BITMAP,
 	MYNT_GRAPHIC_QUESTION,
 	MYNT_GRAPHIC_TRIOPTIMUM,
-	MYNT_GRAPHIC_P03
+	MYNT_GRAPHIC_P03,
+	MYNT_GRAPHIC_CHECKERS
 };
 
 /* USER CODE END PD */
@@ -156,7 +139,7 @@ uint8_t randomBits = 0;
 uint8_t brightness = 2;
 uint8_t currentForegroundColor[3] = {0, 0, 0};
 uint8_t currentBackgroundColor[3] = {0, 0, 0};
-uint8_t allColorsBrightness[8][3] = {
+uint8_t allColorsBrightness[ALL_COLORS_COUNT][3] = {
 		{0, 0, 0},			// black
 		{128, 128, 128},	// white
 		{128, 0, 0},		// red
@@ -194,6 +177,13 @@ uint8_t carTrackDelay = 0;
 uint8_t carCheats = CAR_NORMAL;
 uint8_t konamiCode = 0;
 
+extern volatile uint8_t checkersState;
+extern volatile uint8_t checkersBoard[8][8];
+extern volatile uint8_t checkersMoveCount;
+extern volatile uint8_t checkersMoveList[24][5];
+extern volatile uint8_t checkersCaptureCount;
+volatile uint8_t checkersCurrentMove = 0;
+
 uint32_t blinkDelay = 0;
 uint32_t blinkAnim = 0;
 uint8_t blinkState = 0;
@@ -229,6 +219,17 @@ const uint8_t carTrophy[CAR_TROPHY_SIZE] = {
 const uint8_t carTrack[CAR_TRACK_SIZE] = {
 		19, 21, 38, 39, 57, 59, 76, 77,
 		95, 97, 114, 115, 133
+};
+
+const uint8_t checkersBoardPixels[8][8] = {
+		{31, 200, 50, 200, 69, 200, 88, 200},
+		{200, 46, 200, 65, 200, 84, 200, 103},
+		{32, 200, 51, 200, 70, 200, 89, 200},
+		{200, 45, 200, 64, 200, 83, 200, 102},
+		{33, 200, 52, 200, 71, 200, 90, 200},
+		{200, 44, 200, 63, 200, 82, 200, 101},
+		{34, 200, 53, 200, 72, 200, 91, 200},
+		{200, 43, 200, 62, 200, 81, 200, 100}
 };
 
 const uint8_t digits[10][7] = {
@@ -362,6 +363,13 @@ const uint8_t graphics[][18] = {
 				0b01000000, 0b00111000, 0b00000000, 0b00000000,
 				0b00000000, 0b00000001, 0b10011000, 0b00000000,
 				0b00000000, 0b00000000, 0b00000000, 0b00000000,
+				0b00000000, 0b00000000
+		},
+		{		// MYNT_GRAPHIC_CHECKERS
+				0b00000000, 0b00011111, 0b11000000, 0b00000100,
+				0b00001000, 0b00000000, 0b10000001, 0b00000000,
+				0b00010000, 0b00100000, 0b00000010, 0b00000100,
+				0b00000000, 0b01000000, 0b10000011, 0b11111000,
 				0b00000000, 0b00000000
 		}
 
@@ -577,7 +585,7 @@ int main(void)
 		  } else {
 			  buttonTime = 0;
 			  heldButton = tempButton;
-			  if (currentGraphic == MYNT_GRAPHIC_TRACK) {
+			  if (myntState == MYNT_RACE) {
 				  if (tempButton & BUTTON_A) {
 					  carSpeed = 16 - carCurrentTrack;
 				  } else {
@@ -597,7 +605,71 @@ int main(void)
 						  if (carSide[0] < 2) carSide[0]++;
 					  }
 				  }
-			  } else {
+			  }
+			  else if (myntState == MYNT_CHECKERS) {
+				  if (tempButton & BUTTON_LEFT) {
+					  if (checkersCurrentMove > 0) {
+						  checkersCurrentMove--;
+					  } else {
+						  if (checkersCaptureCount > 0) {
+							  checkersCurrentMove = checkersCaptureCount - 1;
+						  } else {
+							  checkersCurrentMove = checkersMoveCount - 1;
+						  }
+					  }
+				  }
+				  if (tempButton & BUTTON_RIGHT) {
+					  if (checkersCurrentMove < checkersMoveCount) {
+						  checkersCurrentMove++;
+					  } else {
+						  checkersCurrentMove = 0;
+					  }
+				  }
+				  if (tempButton & BUTTON_A) {
+					  uint8_t x = checkersMoveList[checkersCurrentMove][0];
+					  uint8_t y = checkersMoveList[checkersCurrentMove][1];
+					  uint8_t nx = checkersMoveList[checkersCurrentMove][2];
+					  uint8_t ny = checkersMoveList[checkersCurrentMove][3];
+					  uint8_t nnx = 0;
+					  uint8_t nny = 0;
+					  uint8_t queen = checkersBoard[x][y] & CHECKERS_QUEEN_FLAG;
+					  checkersBoard[x][y] = CHECKERS_BOARD_EMPTY;
+					  if (nx > x) {
+						  if ((nx - x) > 1) {
+							  nnx = x + 1;
+						  }
+					  } else {
+						  if ((x - nx) > 1) {
+							  nnx = nx + 1;
+						  }
+					  }
+					  if (ny > y) {
+						  if ((ny - y) > 1) {
+							  nny = y + 1;
+							  checkersBoard[nnx][nny] = CHECKERS_BOARD_EMPTY;
+						  }
+					  } else {
+						  if ((y - ny) > 1) {
+							  nny = ny + 1;
+							  checkersBoard[nnx][nny] = CHECKERS_BOARD_EMPTY;
+						  }
+					  }
+					  if (checkersState == CHECKERS_STATE_PLAY) {
+						  checkersBoard[nx][ny] = CHECKERS_BOARD_WHITE | queen;
+						  if (ny == 7) checkersBoard[nx][ny] |= CHECKERS_QUEEN_FLAG;
+						  checkersState = CHECKERS_STATE_RESPONSE;
+					  }
+					  else if (checkersState == CHECKERS_STATE_RESPONSE) {
+						  checkersBoard[nx][ny] = CHECKERS_BOARD_BLACK | queen;
+						  if (ny == 0) checkersBoard[nx][ny] |= CHECKERS_QUEEN_FLAG;
+						  checkersState = CHECKERS_STATE_PLAY;
+					  }
+					  else {
+						  checkersState = CHECKERS_STATE_START;
+					  }
+				  }
+			  }
+			  else {
 				  if (tempButton == (BUTTON_A | BUTTON_UP)) {
 					  currentGraphic = MYNT_GRAPHIC_OK;
 					  if (myntState != MYNT_ALERT) previousColor = foregroundColor;
@@ -646,19 +718,6 @@ int main(void)
 					  foregroundColor = FOREGROUND_WHITE;
 					  myntState = MYNT_ALERT;
 				  }
-				  if (tempButton == (BUTTON_B | BUTTON_RIGHT)) {
-					  foregroundColor++;
-					  if (foregroundColor > 7) foregroundColor = 1;
-				  }
-				  if (tempButton == (BUTTON_B | BUTTON_LEFT)) {
-					  glitchFlag ^= 1;
-				  }
-				  if (tempButton == (BUTTON_B | BUTTON_UP)) {
-					  if (brightness > 0) brightness--;
-				  }
-				  if (tempButton == (BUTTON_B | BUTTON_DOWN)) {
-					  if (brightness < 7) brightness++;
-				  }
 				  if (tempButton == BUTTON_LEFT) {
 					  currentGraphic = MYNT_GRAPHIC_OWO;
 					  blinkDelay = 0;
@@ -681,6 +740,19 @@ int main(void)
 					  if (myntState == MYNT_ALERT) foregroundColor = previousColor;
 					  myntState = MYNT_STATIC;
 				  }
+			  }
+			  if (tempButton == (BUTTON_B | BUTTON_RIGHT)) {
+				  foregroundColor++;
+				  if (foregroundColor > 7) foregroundColor = 1;
+			  }
+			  if (tempButton == (BUTTON_B | BUTTON_LEFT)) {
+				  glitchFlag ^= 1;
+			  }
+			  if (tempButton == (BUTTON_B | BUTTON_UP)) {
+				  if (brightness > 0) brightness--;
+			  }
+			  if (tempButton == (BUTTON_B | BUTTON_DOWN)) {
+				  if (brightness < 7) brightness++;
 			  }
 
 
@@ -716,6 +788,12 @@ int main(void)
 				  carSpeed = 24;
 				  curbAnimation = 0;
 			  }
+			  if (tempButton == (BUTTON_UP | BUTTON_LEFT | BUTTON_B)) {
+				  currentGraphic = MYNT_GRAPHIC_CHECKERS;
+				  myntState = MYNT_CHECKERS;
+				  foregroundColor = FOREGROUND_WHITE;
+				  checkersState = CHECKERS_STATE_START;
+			  }
 		  }
 	  }
 
@@ -748,7 +826,7 @@ int main(void)
 			  }
 		  }
 
-		  if (currentGraphic == MYNT_GRAPHIC_TRACK) { // Dodatkowe grafiki samochodów
+		  if (myntState == MYNT_RACE) { // Dodatkowe grafiki samochodów
 			  if (curbAnim >= (carSpeed>>(1+konamiCode))) {
 				  curbAnim -= (carSpeed>>(1+konamiCode));
 				  curbAnimation--;
@@ -908,6 +986,164 @@ int main(void)
 			  } else {
 				  for (uint8_t i=0; i<CAR_TROPHY_SIZE; i++) {
 					  setPixelColor(carTrophy[i]+phaseGlitch, allColorsBrightness[7-konamiCode][0], allColorsBrightness[7-konamiCode][1], allColorsBrightness[7-konamiCode][2]);
+				  }
+			  }
+		  }
+		  else if (myntState == MYNT_CHECKERS) {
+			  checkersMoveCount = 0;
+			  checkersCaptureCount = 0;
+			  switch (checkersState) {
+				  case CHECKERS_STATE_START: {
+					  for (uint8_t x = 0; x < 8; x++) {
+						  for (uint8_t y = 0; y < 8; y++) {
+							  if (x%2 == 1) {
+								  if (y%2 == 1) {
+									  if (y < 3) checkersBoard[x][y] = CHECKERS_BOARD_WHITE;
+									  else if (y >= 5) checkersBoard[x][y] = CHECKERS_BOARD_BLACK;
+									  else checkersBoard[x][y] = CHECKERS_BOARD_EMPTY;
+								  } else {
+									  checkersBoard[x][y] = CHECKERS_BOARD_ILLEGAL;
+								  }
+							  } else {
+								  if (y%2 == 1) {
+									  checkersBoard[x][y] = CHECKERS_BOARD_ILLEGAL;
+								  } else {
+									  if (y < 3) checkersBoard[x][y] = CHECKERS_BOARD_WHITE;
+									  else if (y >= 5) checkersBoard[x][y] = CHECKERS_BOARD_BLACK;
+									  else checkersBoard[x][y] = CHECKERS_BOARD_EMPTY;
+								  }
+							  }
+							  uint8_t pieceColor = CHECKERS_COLOR_EMPTY;
+							  switch (checkersBoard[x][y]) {
+								  case CHECKERS_BOARD_WHITE: {
+									  pieceColor = CHECKERS_COLOR_WHITE;
+									  break;
+								  }
+								  case CHECKERS_BOARD_BLACK: {
+									  pieceColor = CHECKERS_COLOR_BLACK;
+									  break;
+								  }
+							  }
+							  setPixelColorNumber(checkersBoardPixels[x][y], pieceColor);
+						  }
+					  }
+					  checkersState = CHECKERS_STATE_PLAY;
+					  break;
+				  }
+				  case CHECKERS_STATE_PLAY: {
+					  for (uint8_t x = 0; x < 8; x++) {
+						  for (uint8_t y = 0; y < 8; y++) {
+							  uint8_t pieceColor = CHECKERS_COLOR_EMPTY;
+							  switch (checkersBoard[x][y] & 0b1111) {
+								  case CHECKERS_BOARD_WHITE: {
+									  pieceColor = CHECKERS_COLOR_WHITE;
+									  checkersCheckPossibleMoves(x, y, CHECKERS_BOARD_BLACK);
+								  	  break;
+								  }
+								  case CHECKERS_BOARD_BLACK: {
+									  pieceColor = CHECKERS_COLOR_BLACK;
+									  break;
+								  }
+						      }
+						      setPixelColorNumber(checkersBoardPixels[x][y], pieceColor);
+					      }
+					  }
+					  if (checkersMoveCount > 0) {
+						  if (checkersCurrentMove >= checkersMoveCount) {
+							  checkersCurrentMove = 0;
+						  }
+						  uint8_t checkersTempMove = checkersCurrentMove;
+						  if (checkersCaptureCount > 0) {
+//							  if (checkersCurrentMove >= checkersCaptureCount) {
+//								  checkersCurrentMove = 0;
+//							  }
+//							  uint8_t checkersTempCapture = 0;
+							  uint8_t i = checkersCurrentMove;
+							  while(1) {
+								  i = i % checkersMoveCount;
+								  if (checkersMoveList[i][4] == 0) {
+									  i++;
+									  continue;
+								  }
+
+//								  if (checkersCurrentMove > checkersTempCapture) {
+//									  checkersTempCapture++;
+//								  } else {
+									  checkersTempMove = i;
+									  checkersCurrentMove = i;
+									  break;
+//								  }
+							  }
+						  }
+						  uint8_t x = checkersMoveList[checkersTempMove][0];
+						  uint8_t y = checkersMoveList[checkersTempMove][1];
+						  uint8_t nx = checkersMoveList[checkersTempMove][2];
+						  uint8_t ny = checkersMoveList[checkersTempMove][3];
+						  setPixelColorNumber(checkersBoardPixels[x][y], CHECKERS_COLOR_SELECTED);
+						  setPixelColorNumber(checkersBoardPixels[nx][ny], CHECKERS_COLOR_CHOICE);
+					  } else {
+						  checkersState = CHECKERS_STATE_LOSER;
+					  }
+					  break;
+				  }
+				  case CHECKERS_STATE_RESPONSE: {
+					  for (uint8_t x = 0; x < 8; x++) {
+						  for (uint8_t y = 0; y < 8; y++) {
+							  uint8_t pieceColor = CHECKERS_COLOR_EMPTY;
+							  switch (checkersBoard[x][y] & 0b1111) {
+								  case CHECKERS_BOARD_BLACK: {
+									  pieceColor = CHECKERS_COLOR_BLACK;
+									  checkersCheckPossibleMoves(x, y, CHECKERS_BOARD_WHITE);
+									  break;
+								  }
+								  case CHECKERS_BOARD_WHITE: {
+									  pieceColor = CHECKERS_COLOR_WHITE;
+									  break;
+								  }
+							  }
+							  setPixelColorNumber(checkersBoardPixels[x][y], pieceColor);
+						  }
+					  }
+					  if (checkersMoveCount > 0) {
+						  checkersCurrentMove = adcBuffer[0]%checkersMoveCount;
+						  uint8_t checkersTempMove = checkersCurrentMove;
+						  if (checkersCaptureCount > 0) {
+//							  checkersCurrentMove = adcBuffer[0]%checkersCaptureCount;
+//							  uint8_t checkersTempCapture = 0;
+							  uint8_t i = checkersCurrentMove;
+							  while(1) {
+								  i = i % checkersMoveCount;
+								  if (checkersMoveList[i][4] == 0) {
+									  i++;
+									  continue;
+								  }
+//								  if (checkersCurrentMove > checkersTempCapture) {
+//									  checkersTempCapture++;
+//								  } else {
+									  checkersTempMove = i;
+									  checkersCurrentMove = i;
+									  break;
+//								  }
+							  }
+						  }
+						  uint8_t x = checkersMoveList[checkersTempMove][0];
+						  uint8_t y = checkersMoveList[checkersTempMove][1];
+						  uint8_t nx = checkersMoveList[checkersTempMove][2];
+						  uint8_t ny = checkersMoveList[checkersTempMove][3];
+						  setPixelColorNumber(checkersBoardPixels[x][y], CHECKERS_COLOR_SELECTED);
+						  setPixelColorNumber(checkersBoardPixels[nx][ny], CHECKERS_COLOR_CHOICE);
+					  } else {
+						  checkersState = CHECKERS_STATE_WINNER;
+					  }
+					  break;
+				  }
+				  case CHECKERS_STATE_LOSER: {
+
+					  break;
+				  }
+				  case CHECKERS_STATE_WINNER: {
+
+					  break;
 				  }
 			  }
 		  } else { // klatki animacji
@@ -1276,7 +1512,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-inline void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b) {
+void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b) {
 	if (p > LEDS) return;
 
 	uint32_t er = 0;
@@ -1321,10 +1557,15 @@ inline void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b) {
 	framebuffer[i+8] = 0b01001001 | ((eb)&0xFF);
 }
 
+void setPixelColorNumber(uint16_t p, uint8_t n) {
+	if (n >= ALL_COLORS_COUNT) return;
+	setPixelColor(p, allColorsBrightness[n][0], allColorsBrightness[n][1], allColorsBrightness[n][2]);
+}
+
 /*
  * Returns 0x0RGB, 0x1000 if no pixel
  */
-inline uint32_t readPixelColor(uint16_t p) {
+uint32_t readPixelColor(uint16_t p) {
 	if (p > LEDS) return 0x1000;
 
 	uint16_t i = p*9;
@@ -1358,7 +1599,7 @@ inline uint32_t readPixelColor(uint16_t p) {
 	return rgb;
 }
 
-inline void addPixelColor(uint16_t p, uint8_t ri, uint8_t gi, uint8_t bi) {
+void addPixelColor(uint16_t p, uint8_t ri, uint8_t gi, uint8_t bi) {
 	if (p > LEDS) return;
 
 	uint16_t i = p*9;

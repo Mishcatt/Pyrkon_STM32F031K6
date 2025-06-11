@@ -182,6 +182,7 @@ extern volatile uint8_t checkersBoard[8][8];
 extern volatile uint8_t checkersMoveCount;
 extern volatile uint8_t checkersMoveList[24][5];
 extern volatile uint8_t checkersCaptureCount;
+extern volatile uint8_t checkersPoints[2];
 volatile uint8_t checkersCurrentMove = 0;
 
 uint32_t blinkDelay = 0;
@@ -222,14 +223,19 @@ const uint8_t carTrack[CAR_TRACK_SIZE] = {
 };
 
 const uint8_t checkersBoardPixels[8][8] = {
-		{31, 200, 50, 200, 69, 200, 88, 200},
-		{200, 46, 200, 65, 200, 84, 200, 103},
 		{32, 200, 51, 200, 70, 200, 89, 200},
 		{200, 45, 200, 64, 200, 83, 200, 102},
 		{33, 200, 52, 200, 71, 200, 90, 200},
 		{200, 44, 200, 63, 200, 82, 200, 101},
 		{34, 200, 53, 200, 72, 200, 91, 200},
-		{200, 43, 200, 62, 200, 81, 200, 100}
+		{200, 43, 200, 62, 200, 81, 200, 100},
+		{35, 200, 54, 200, 73, 200, 92, 200},
+		{200, 42, 200, 61, 200, 80, 200, 99}
+};
+
+const uint8_t checkersBoardCapturedPixels[2][12] = {
+		{19, 21, 38, 40, 57, 59, 76, 78, 95, 97, 114, 116},
+		{124, 106, 105, 87, 86, 68, 67, 49, 48, 30, 29, 11}
 };
 
 const uint8_t digits[10][7] = {
@@ -366,10 +372,10 @@ const uint8_t graphics[][18] = {
 				0b00000000, 0b00000000
 		},
 		{		// MYNT_GRAPHIC_CHECKERS
-				0b00000000, 0b00011111, 0b11000000, 0b00000100,
-				0b00001000, 0b00000000, 0b10000001, 0b00000000,
-				0b00010000, 0b00100000, 0b00000010, 0b00000100,
-				0b00000000, 0b01000000, 0b10000011, 0b11111000,
+				0b00000000, 0b00000000, 0b00000011, 0b11110001,
+				0b00000000, 0b01000000, 0b00100000, 0b00001000,
+				0b00000100, 0b00000001, 0b00000000, 0b10000000,
+				0b00100000, 0b00011111, 0b10000000, 0b00000000,
 				0b00000000, 0b00000000
 		}
 
@@ -994,6 +1000,8 @@ int main(void)
 			  checkersCaptureCount = 0;
 			  switch (checkersState) {
 				  case CHECKERS_STATE_START: {
+					  checkersPoints[0] = 0;
+					  checkersPoints[1] = 0;
 					  for (uint8_t x = 0; x < 8; x++) {
 						  for (uint8_t y = 0; y < 8; y++) {
 							  if (x%2 == 1) {
@@ -1031,17 +1039,21 @@ int main(void)
 					  break;
 				  }
 				  case CHECKERS_STATE_PLAY: {
+					  checkersPoints[0] = 12;
+					  checkersPoints[1] = 12;
 					  for (uint8_t x = 0; x < 8; x++) {
 						  for (uint8_t y = 0; y < 8; y++) {
 							  uint8_t pieceColor = CHECKERS_COLOR_EMPTY;
 							  switch (checkersBoard[x][y] & 0b1111) {
 								  case CHECKERS_BOARD_WHITE: {
 									  pieceColor = CHECKERS_COLOR_WHITE;
+									  checkersPoints[1]--;
 									  checkersCheckPossibleMoves(x, y, CHECKERS_BOARD_BLACK);
 								  	  break;
 								  }
 								  case CHECKERS_BOARD_BLACK: {
 									  pieceColor = CHECKERS_COLOR_BLACK;
+									  checkersPoints[0]--;
 									  break;
 								  }
 						      }
@@ -1087,17 +1099,21 @@ int main(void)
 					  break;
 				  }
 				  case CHECKERS_STATE_RESPONSE: {
+					  checkersPoints[0] = 12;
+					  checkersPoints[1] = 12;
 					  for (uint8_t x = 0; x < 8; x++) {
 						  for (uint8_t y = 0; y < 8; y++) {
 							  uint8_t pieceColor = CHECKERS_COLOR_EMPTY;
 							  switch (checkersBoard[x][y] & 0b1111) {
 								  case CHECKERS_BOARD_BLACK: {
 									  pieceColor = CHECKERS_COLOR_BLACK;
+									  checkersPoints[0]--;
 									  checkersCheckPossibleMoves(x, y, CHECKERS_BOARD_WHITE);
 									  break;
 								  }
 								  case CHECKERS_BOARD_WHITE: {
 									  pieceColor = CHECKERS_COLOR_WHITE;
+									  checkersPoints[1]--;
 									  break;
 								  }
 							  }
@@ -1145,6 +1161,11 @@ int main(void)
 
 					  break;
 				  }
+			  }
+
+			  for (uint8_t i=0; i<12; i++) {
+				  if (checkersPoints[0] > i) setPixelColorNumber(checkersBoardCapturedPixels[0][i], CHECKERS_COLOR_BLACK);
+				  if (checkersPoints[1] > i) setPixelColorNumber(checkersBoardCapturedPixels[1][i], CHECKERS_COLOR_WHITE);
 			  }
 		  } else { // klatki animacji
 			  if (myntState == MYNT_BLINK) {

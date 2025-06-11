@@ -13,6 +13,7 @@ volatile uint8_t checkersBoard[8][8];
 volatile uint8_t checkersMoveCount;
 volatile uint8_t checkersMoveList[24][5];
 volatile uint8_t checkersCaptureCount = 0;
+volatile uint8_t checkersPoints[2] = {0, 0};
 
 void checkersCheckPossibleMoves(uint8_t x, uint8_t y, uint8_t enemy) {
 	int8_t directions[4][2] = { { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } };

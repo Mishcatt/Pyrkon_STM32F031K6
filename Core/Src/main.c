@@ -48,6 +48,7 @@
 #define COLOR_BLUE {0, 0, 64}
 #define COLOR_PURPLE {32, 0, 32}
 #define ALL_COLORS_COUNT (8)
+#define COLOR_RAINBOW (255)
 
 enum carStates {
 	CAR_NORMAL,
@@ -184,6 +185,7 @@ extern volatile uint8_t checkersMoveList[24][5];
 extern volatile uint8_t checkersCaptureCount;
 extern volatile uint8_t checkersPoints[2];
 volatile uint8_t checkersCurrentMove = 0;
+volatile uint8_t checkersForcePiece[2] = {255, 255};
 
 uint32_t blinkDelay = 0;
 uint32_t blinkAnim = 0;
@@ -636,6 +638,7 @@ int main(void)
 					  uint8_t y = checkersMoveList[checkersCurrentMove][1];
 					  uint8_t nx = checkersMoveList[checkersCurrentMove][2];
 					  uint8_t ny = checkersMoveList[checkersCurrentMove][3];
+					  uint8_t capture = checkersMoveList[checkersCurrentMove][4];
 					  uint8_t nnx = 0;
 					  uint8_t nny = 0;
 					  uint8_t queen = checkersBoard[x][y] & CHECKERS_QUEEN_FLAG;
@@ -660,15 +663,41 @@ int main(void)
 							  checkersBoard[nnx][nny] = CHECKERS_BOARD_EMPTY;
 						  }
 					  }
+
+					  checkersForcePiece[0] = 255;
+					  checkersForcePiece[1] = 255;
+
 					  if (checkersState == CHECKERS_STATE_PLAY) {
 						  checkersBoard[nx][ny] = CHECKERS_BOARD_WHITE | queen;
 						  if (ny == 7) checkersBoard[nx][ny] |= CHECKERS_QUEEN_FLAG;
-						  checkersState = CHECKERS_STATE_RESPONSE;
+						  if (capture) {
+							  checkersCaptureCount = 0;
+							  checkersCheckPossibleMoves(nx, ny, CHECKERS_BOARD_BLACK);
+							  if (checkersCaptureCount == 0) {
+								  checkersState = CHECKERS_STATE_RESPONSE;
+							  } else {
+								  checkersForcePiece[0] = nx;
+								  checkersForcePiece[1] = ny;
+							  }
+						  } else {
+							  checkersState = CHECKERS_STATE_RESPONSE;
+						  }
 					  }
 					  else if (checkersState == CHECKERS_STATE_RESPONSE) {
 						  checkersBoard[nx][ny] = CHECKERS_BOARD_BLACK | queen;
 						  if (ny == 0) checkersBoard[nx][ny] |= CHECKERS_QUEEN_FLAG;
-						  checkersState = CHECKERS_STATE_PLAY;
+						  if (capture) {
+							  checkersCaptureCount = 0;
+							  checkersCheckPossibleMoves(nx, ny, CHECKERS_BOARD_WHITE);
+							  if (checkersCaptureCount == 0) {
+								  checkersState = CHECKERS_STATE_PLAY;
+							  } else {
+								  checkersForcePiece[0] = nx;
+								  checkersForcePiece[1] = ny;
+							  }
+						  } else {
+							  checkersState = CHECKERS_STATE_PLAY;
+						  }
 					  }
 					  else {
 						  checkersState = CHECKERS_STATE_START;
@@ -1002,6 +1031,8 @@ int main(void)
 				  case CHECKERS_STATE_START: {
 					  checkersPoints[0] = 0;
 					  checkersPoints[1] = 0;
+					  checkersForcePiece[0] = 255;
+					  checkersForcePiece[1] = 255;
 					  for (uint8_t x = 0; x < 8; x++) {
 						  for (uint8_t y = 0; y < 8; y++) {
 							  if (x%2 == 1) {
@@ -1060,6 +1091,11 @@ int main(void)
 						      setPixelColorNumber(checkersBoardPixels[x][y], pieceColor);
 					      }
 					  }
+					  if (checkersForcePiece[0] < 8) {
+						  checkersMoveCount = 0;
+						  checkersCaptureCount = 0;
+						  checkersCheckPossibleMoves(checkersForcePiece[0], checkersForcePiece[1], CHECKERS_BOARD_BLACK);
+					  }
 					  if (checkersMoveCount > 0) {
 						  if (checkersCurrentMove >= checkersMoveCount) {
 							  checkersCurrentMove = 0;
@@ -1096,6 +1132,10 @@ int main(void)
 					  } else {
 						  checkersState = CHECKERS_STATE_LOSER;
 					  }
+					  for (uint8_t i=0; i<12; i++) {
+						  if (checkersPoints[0] > i) setPixelColorNumber(checkersBoardCapturedPixels[0][i], CHECKERS_COLOR_BLACK);
+						  if (checkersPoints[1] > i) setPixelColorNumber(checkersBoardCapturedPixels[1][i], CHECKERS_COLOR_WHITE);
+					  }
 					  break;
 				  }
 				  case CHECKERS_STATE_RESPONSE: {
@@ -1119,6 +1159,11 @@ int main(void)
 							  }
 							  setPixelColorNumber(checkersBoardPixels[x][y], pieceColor);
 						  }
+					  }
+					  if (checkersForcePiece[0] < 8) {
+						  checkersMoveCount = 0;
+						  checkersCaptureCount = 0;
+						  checkersCheckPossibleMoves(checkersForcePiece[0], checkersForcePiece[1], CHECKERS_BOARD_BLACK);
 					  }
 					  if (checkersMoveCount > 0) {
 						  checkersCurrentMove = adcBuffer[0]%checkersMoveCount;
@@ -1151,21 +1196,58 @@ int main(void)
 					  } else {
 						  checkersState = CHECKERS_STATE_WINNER;
 					  }
+					  for (uint8_t i=0; i<12; i++) {
+						  if (checkersPoints[0] > i) setPixelColorNumber(checkersBoardCapturedPixels[0][i], CHECKERS_COLOR_BLACK);
+						  if (checkersPoints[1] > i) setPixelColorNumber(checkersBoardCapturedPixels[1][i], CHECKERS_COLOR_WHITE);
+					  }
 					  break;
 				  }
 				  case CHECKERS_STATE_LOSER: {
-
+					  for (uint8_t x = 0; x < 8; x++) {
+						  for (uint8_t y = 0; y < 8; y++) {
+							  uint8_t pieceColor = CHECKERS_COLOR_EMPTY;
+							  switch (checkersBoard[x][y] & 0b1111) {
+								  case CHECKERS_BOARD_BLACK: {
+									  pieceColor = COLOR_RAINBOW;
+									  break;
+								  }
+								  case CHECKERS_BOARD_WHITE: {
+									  pieceColor = CHECKERS_COLOR_WHITE;
+									  break;
+								  }
+							  }
+							  setPixelColorNumber(checkersBoardPixels[x][y], pieceColor);
+						  }
+					  }
+					  for (uint8_t i=0; i<12; i++) {
+						  if (checkersPoints[0] > i) setPixelColorNumber(checkersBoardCapturedPixels[0][i], COLOR_RAINBOW);
+						  if (checkersPoints[1] > i) setPixelColorNumber(checkersBoardCapturedPixels[1][i], CHECKERS_COLOR_WHITE);
+					  }
 					  break;
 				  }
 				  case CHECKERS_STATE_WINNER: {
-
+					  for (uint8_t x = 0; x < 8; x++) {
+						  for (uint8_t y = 0; y < 8; y++) {
+							  uint8_t pieceColor = CHECKERS_COLOR_EMPTY;
+							  switch (checkersBoard[x][y] & 0b1111) {
+								  case CHECKERS_BOARD_BLACK: {
+									  pieceColor = CHECKERS_COLOR_BLACK;
+									  break;
+								  }
+								  case CHECKERS_BOARD_WHITE: {
+									  pieceColor = COLOR_RAINBOW;
+									  break;
+								  }
+							  }
+							  setPixelColorNumber(checkersBoardPixels[x][y], pieceColor);
+						  }
+					  }
+					  for (uint8_t i=0; i<12; i++) {
+						  if (checkersPoints[0] > i) setPixelColorNumber(checkersBoardCapturedPixels[0][i], CHECKERS_COLOR_BLACK);
+						  if (checkersPoints[1] > i) setPixelColorNumber(checkersBoardCapturedPixels[1][i], COLOR_RAINBOW);
+					  }
 					  break;
 				  }
-			  }
-
-			  for (uint8_t i=0; i<12; i++) {
-				  if (checkersPoints[0] > i) setPixelColorNumber(checkersBoardCapturedPixels[0][i], CHECKERS_COLOR_BLACK);
-				  if (checkersPoints[1] > i) setPixelColorNumber(checkersBoardCapturedPixels[1][i], CHECKERS_COLOR_WHITE);
 			  }
 		  } else { // klatki animacji
 			  if (myntState == MYNT_BLINK) {
@@ -1533,6 +1615,8 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+
+
 void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b) {
 	if (p > LEDS) return;
 
@@ -1579,8 +1663,55 @@ void setPixelColor(uint16_t p, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void setPixelColorNumber(uint16_t p, uint8_t n) {
-	if (n >= ALL_COLORS_COUNT) return;
-	setPixelColor(p, allColorsBrightness[n][0], allColorsBrightness[n][1], allColorsBrightness[n][2]);
+	static uint16_t hue = 0;
+    uint8_t region = hue / 10923; // 65536 / 6 regions = ~10923
+    uint32_t remainder = (hue - (region * 10923)) * 6;
+    uint32_t o = 0;
+    uint32_t q = 65535 - ((remainder * 65535) >> 16);
+    uint32_t t = (remainder * 65535) >> 16;
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0;
+
+	if (n < ALL_COLORS_COUNT) setPixelColor(p, allColorsBrightness[n][0], allColorsBrightness[n][1], allColorsBrightness[n][2]);
+	else if (n == COLOR_RAINBOW) {
+	    switch (region) {
+	        case 0:
+	            r = 65535 >> 10;
+	            g = t >> 10;
+	            b = o >> 10;
+	            break;
+	        case 1:
+	            r = q >> 10;
+	            g = 65535 >> 10;
+	            b = o >> 10;
+	            break;
+	        case 2:
+	            r = o >> 10;
+	            g = 65535 >> 10;
+	            b = t >> 10;
+	            break;
+	        case 3:
+	            r = o >> 10;
+	            g = q >> 10;
+	            b = 65535 >> 10;
+	            break;
+	        case 4:
+	            r = t >> 10;
+	            g = o >> 10;
+	            b = 65535 >> 10;
+	            break;
+	        default:
+	            r = 65535 >> 10;
+	            g = o >> 10;
+	            b = q >> 10;
+	            break;
+	    }
+	    setPixelColor(p, r, g, b);
+	    hue += 32;
+	} else {
+		return;
+	}
 }
 
 /*

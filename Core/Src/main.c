@@ -114,7 +114,7 @@ volatile uint8_t msCounter = 0;
 
 const uint8_t colors[8][3] = {
 		{0, 0, 0},			// black
-		{128, 128, 128},	// white
+		{128, 128, 64},		// white
 		{128, 0, 0},		// red
 		{0, 128, 0},		// green
 		{0, 0, 128},		// blue
@@ -326,9 +326,9 @@ const uint8_t graphics[][18] = {
 		},
 		{		// MYNT_GRAPHIC_HEART
 				0b00000000, 0b00000001, 0b00000000, 0b11000000,
-				0b01110000, 0b00111100, 0b00011111, 0b00001111,
-				0b11000111, 0b11110011, 0b11111100, 0b11111110,
-				0b01111111, 0b10011101, 0b11000110, 0b01100000,
+				0b01010000, 0b00100100, 0b00010001, 0b00001000,
+				0b01000100, 0b00010010, 0b00000100, 0b10010010,
+				0b01001100, 0b10011101, 0b11000110, 0b01100000,
 				0b00000000, 0b00000000
 		},
 		{		// MYNT_GRAPHIC_BLUSH
@@ -374,10 +374,10 @@ const uint8_t graphics[][18] = {
 				0b00000000, 0b00000000
 		},
 		{		// MYNT_GRAPHIC_CHECKERS
-				0b00000000, 0b00000000, 0b00000011, 0b11110001,
-				0b00000000, 0b01000000, 0b00100000, 0b00001000,
-				0b00000100, 0b00000001, 0b00000000, 0b10000000,
-				0b00100000, 0b00011111, 0b10000000, 0b00000000,
+				0b00000000, 0b00000000, 0b00000001, 0b11110000,
+				0b00001000, 0b00000010, 0b00000001, 0b00000000,
+				0b01000000, 0b00100000, 0b00001000, 0b00000100,
+				0b00000001, 0b00001111, 0b10000000, 0b00000000,
 				0b00000000, 0b00000000
 		}
 
@@ -787,7 +787,7 @@ int main(void)
 				  if (brightness > 0) brightness--;
 			  }
 			  if (tempButton == (BUTTON_B | BUTTON_DOWN)) {
-				  if (brightness < 7) brightness++;
+				  if (brightness < 6) brightness++;
 			  }
 
 
@@ -862,6 +862,7 @@ int main(void)
 		  }
 
 		  if (myntState == MYNT_RACE) { // Dodatkowe grafiki samochodów
+			  foregroundColor = FOREGROUND_GREEN;
 			  if (curbAnim >= (carSpeed>>(1+konamiCode))) {
 				  curbAnim -= (carSpeed>>(1+konamiCode));
 				  curbAnimation--;
@@ -943,6 +944,7 @@ int main(void)
 						  carCurrentTrack = 0;
 						  carTrackDelay = 0;
 						  carColors[0] = 1;
+						  konamiCode = 0;
 						  carSpeed = 24;
 						  curbAnimation = 0;
 						  carCurrentTrack = CAR_TRACK_SIZE;
@@ -952,6 +954,11 @@ int main(void)
 
 
 				  if (carState == CAR_NORMAL) {
+					  if (konamiCode) {
+						  carColors[0] = COLOR_RAINBOW;
+					  } else {
+						  carColors[0] = FOREGROUND_WHITE;
+					  }
 					  for (uint8_t car=1; car<7; car++) {
 						  carPlace[car]--;
 						  if (carPlace[car] < -2) {
@@ -1012,7 +1019,7 @@ int main(void)
 					  }
 				  }
 				  for (uint8_t i=0; i<6; i++) { // player car
-					  setPixelColor((carSprites[carSide[0]+carExplosionFrame][i]+(19*carPlace[0]))+phaseGlitch, allColorsBrightness[carColors[0]+konamiCode][0], allColorsBrightness[carColors[0]+konamiCode][1], allColorsBrightness[carColors[0]+konamiCode][2]);
+					  setPixelColorNumber((carSprites[carSide[0]+carExplosionFrame][i]+(19*carPlace[0]))+phaseGlitch, carColors[0]);
 				  }
 				  for (uint8_t p=0; p<2; p++) {
 					  setPixelColor(3+(19*curbAnimation)+(19*p*4)+phaseGlitch, currentForegroundColor[0], currentForegroundColor[1], currentForegroundColor[2]);
@@ -1020,11 +1027,12 @@ int main(void)
 				  }
 			  } else {
 				  for (uint8_t i=0; i<CAR_TROPHY_SIZE; i++) {
-					  setPixelColor(carTrophy[i]+phaseGlitch, allColorsBrightness[7-konamiCode][0], allColorsBrightness[7-konamiCode][1], allColorsBrightness[7-konamiCode][2]);
+					  setPixelColorNumber(carTrophy[i]+phaseGlitch, COLOR_RAINBOW);
 				  }
 			  }
 		  }
 		  else if (myntState == MYNT_CHECKERS) {
+			  foregroundColor = FOREGROUND_YELLOW;
 			  checkersMoveCount = 0;
 			  checkersCaptureCount = 0;
 			  switch (checkersState) {
@@ -1163,7 +1171,7 @@ int main(void)
 					  if (checkersForcePiece[0] < 8) {
 						  checkersMoveCount = 0;
 						  checkersCaptureCount = 0;
-						  checkersCheckPossibleMoves(checkersForcePiece[0], checkersForcePiece[1], CHECKERS_BOARD_BLACK);
+						  checkersCheckPossibleMoves(checkersForcePiece[0], checkersForcePiece[1], CHECKERS_BOARD_WHITE);
 					  }
 					  if (checkersMoveCount > 0) {
 						  checkersCurrentMove = adcBuffer[0]%checkersMoveCount;
@@ -1191,8 +1199,8 @@ int main(void)
 						  uint8_t y = checkersMoveList[checkersTempMove][1];
 						  uint8_t nx = checkersMoveList[checkersTempMove][2];
 						  uint8_t ny = checkersMoveList[checkersTempMove][3];
-						  setPixelColorNumber(checkersBoardPixels[x][y], CHECKERS_COLOR_SELECTED);
-						  setPixelColorNumber(checkersBoardPixels[nx][ny], CHECKERS_COLOR_CHOICE);
+						  setPixelColorNumber(checkersBoardPixels[x][y], CHECKERS_COLOR_ENEMY_SELECTED);
+						  setPixelColorNumber(checkersBoardPixels[nx][ny], CHECKERS_COLOR_ENEMY_CHOICE);
 					  } else {
 						  checkersState = CHECKERS_STATE_WINNER;
 					  }
@@ -1208,7 +1216,7 @@ int main(void)
 							  uint8_t pieceColor = CHECKERS_COLOR_EMPTY;
 							  switch (checkersBoard[x][y] & 0b1111) {
 								  case CHECKERS_BOARD_BLACK: {
-									  pieceColor = COLOR_RAINBOW;
+									  pieceColor = CHECKERS_COLOR_BLACK;
 									  break;
 								  }
 								  case CHECKERS_BOARD_WHITE: {
@@ -1220,8 +1228,8 @@ int main(void)
 						  }
 					  }
 					  for (uint8_t i=0; i<12; i++) {
-						  if (checkersPoints[0] > i) setPixelColorNumber(checkersBoardCapturedPixels[0][i], COLOR_RAINBOW);
-						  if (checkersPoints[1] > i) setPixelColorNumber(checkersBoardCapturedPixels[1][i], CHECKERS_COLOR_WHITE);
+						  if (checkersPoints[0] > i) setPixelColorNumber(checkersBoardCapturedPixels[0][i], CHECKERS_COLOR_WHITE);
+						  if (checkersPoints[1] > i) setPixelColorNumber(checkersBoardCapturedPixels[1][i], CHECKERS_COLOR_BLACK);
 					  }
 					  break;
 				  }
@@ -1675,36 +1683,37 @@ void setPixelColorNumber(uint16_t p, uint8_t n) {
 
 	if (n < ALL_COLORS_COUNT) setPixelColor(p, allColorsBrightness[n][0], allColorsBrightness[n][1], allColorsBrightness[n][2]);
 	else if (n == COLOR_RAINBOW) {
+		uint8_t tempBrightness = 8 + brightness;
 	    switch (region) {
 	        case 0:
-	            r = 65535 >> 10;
-	            g = t >> 10;
-	            b = o >> 10;
+	            r = 65535 >> tempBrightness;
+	            g = t >> tempBrightness;
+	            b = o >> tempBrightness;
 	            break;
 	        case 1:
-	            r = q >> 10;
-	            g = 65535 >> 10;
-	            b = o >> 10;
+	            r = q >> tempBrightness;
+	            g = 65535 >> tempBrightness;
+	            b = o >> tempBrightness;
 	            break;
 	        case 2:
-	            r = o >> 10;
-	            g = 65535 >> 10;
-	            b = t >> 10;
+	            r = o >> tempBrightness;
+	            g = 65535 >> tempBrightness;
+	            b = t >> tempBrightness;
 	            break;
 	        case 3:
-	            r = o >> 10;
-	            g = q >> 10;
-	            b = 65535 >> 10;
+	            r = o >> tempBrightness;
+	            g = q >> tempBrightness;
+	            b = 65535 >> tempBrightness;
 	            break;
 	        case 4:
-	            r = t >> 10;
-	            g = o >> 10;
-	            b = 65535 >> 10;
+	            r = t >> tempBrightness;
+	            g = o >> tempBrightness;
+	            b = 65535 >> tempBrightness;
 	            break;
 	        default:
-	            r = 65535 >> 10;
-	            g = o >> 10;
-	            b = q >> 10;
+	            r = 65535 >> tempBrightness;
+	            g = o >> tempBrightness;
+	            b = q >> tempBrightness;
 	            break;
 	    }
 	    setPixelColor(p, r, g, b);
